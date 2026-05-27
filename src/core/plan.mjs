@@ -26,7 +26,9 @@ export function createSetupPlan({ mode, runtimes, dryRun }) {
     actions.push(
       write('~/.claude/skills/threadline', 'Install Claude skill entrypoint'),
       write('~/.claude/commands/handoff.md', 'Install Claude handoff command'),
-      write('~/.claude/commands/resume.md', 'Install Claude resume command')
+      write('~/.claude/commands/resume.md', 'Install Claude resume command'),
+      write('~/.claude/commands/context.md', 'Install Claude context command'),
+      write('~/.claude/commands/learnings.md', 'Install Claude learnings command')
     );
   }
 
@@ -45,6 +47,7 @@ export function createSetupPlan({ mode, runtimes, dryRun }) {
     notes: [
       'Merge preserves existing user config and only owns marked Threadline sections.',
       'Replace requires backups and explicit approval.',
+      'Replace reinstalls all registered skill packs for the selected runtimes and clears managed Claude command files first.',
     ],
   };
 }

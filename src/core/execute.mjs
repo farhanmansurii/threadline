@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { createProjectPlan, createSetupPlan } from './plan.mjs';
 import { getThreadlinePaths } from './paths.mjs';
 import { readTemplate, renderTemplate, repoRoot } from './templates.mjs';
+import { executeSkillInstall as runSkillInstall } from './skill-install.mjs';
 import {
   copyDir,
   fileExists,
@@ -35,12 +36,19 @@ export async function executeSetup({ mode, runtimes }) {
   results.push(await writeTextIfMissing(path.join(paths.configDir, 'config.toml'), defaultConfig()));
   results.push(await writeJsonIfChanged(path.join(paths.configDir, 'skills.lock.json'), defaultSkillsLock()));
 
-  if (runtimes.includes('claude')) {
-    results.push(...(await installClaude()));
-  }
+  if (mode === 'replace') {
+    if (runtimes.includes('codex')) {
+      results.push(...(await installCodex({ replace: true })));
+    }
+    results.push(...(await installSkillBundle({ runtimes, replace: true })));
+  } else {
+    if (runtimes.includes('claude')) {
+      results.push(...(await installClaude()));
+    }
 
-  if (runtimes.includes('codex')) {
-    results.push(...(await installCodex({ replace: mode === 'replace' })));
+    if (runtimes.includes('codex')) {
+      results.push(...(await installCodex({ replace: false })));
+    }
   }
 
   return {
@@ -131,6 +139,8 @@ async function installClaude() {
   results.push(...(await copyDir(path.join(root, 'skills/core/threadline'), '~/.claude/skills/threadline')));
   results.push(await writeTextIfChanged('~/.claude/commands/handoff.md', await readTemplate('templates/claude/command-handoff.md')));
   results.push(await writeTextIfChanged('~/.claude/commands/resume.md', await readTemplate('templates/claude/command-resume.md')));
+  results.push(await writeTextIfChanged('~/.claude/commands/context.md', await readTemplate('templates/claude/command-context.md')));
+  results.push(await writeTextIfChanged('~/.claude/commands/learnings.md', await readTemplate('templates/claude/command-learnings.md')));
   return results;
 }
 
@@ -148,6 +158,15 @@ async function installCodex({ replace = false } = {}) {
     .replace('\n# END THREADLINE_MANAGED', '');
   results.push(await upsertManagedBlock('~/.codex/config.toml', 'THREADLINE_MANAGED', body));
   return results;
+}
+
+async function installSkillBundle({ runtimes, replace = false }) {
+  const plan = await runSkillInstall({ runtimes, all: true, replace });
+  return plan.results ?? [];
+}
+
+export async function executeSkillInstall({ runtimes, packIds = [], all = false, replace = false }) {
+  return runSkillInstall({ runtimes, packIds, all, replace });
 }
 
 async function assertCodexManagedBlockIsSafe(filePath) {

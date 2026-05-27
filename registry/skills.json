@@ -5,6 +5,11 @@
       "id": "threadline-core",
       "name": "Threadline Core",
       "bucket": "core",
+      "source": {
+        "type": "local",
+        "path": "skills/core/threadline",
+        "license": "MIT"
+      },
       "triggers": [
         "always"
       ],
@@ -33,6 +38,11 @@
       "id": "react-vite",
       "name": "React Vite",
       "bucket": "detected",
+      "source": {
+        "type": "local",
+        "path": "skills/frontend/react-vite",
+        "license": "MIT"
+      },
       "triggers": [
         "vite.config.js",
         "vite.config.ts",
@@ -66,6 +76,11 @@
       "id": "nextjs",
       "name": "Next.js",
       "bucket": "detected",
+      "source": {
+        "type": "local",
+        "path": "skills/frontend/nextjs",
+        "license": "MIT"
+      },
       "triggers": [
         "next.config.js",
         "next.config.mjs",
@@ -95,6 +110,11 @@
       "id": "node-firebase",
       "name": "Node Firebase",
       "bucket": "detected",
+      "source": {
+        "type": "local",
+        "path": "skills/backend/node-firebase",
+        "license": "MIT"
+      },
       "triggers": [
         "firebase.json",
         "firebase",
@@ -123,6 +143,11 @@
       "id": "playwright-ui",
       "name": "Playwright UI Verification",
       "bucket": "detected",
+      "source": {
+        "type": "local",
+        "path": "skills/verification/playwright-ui",
+        "license": "MIT"
+      },
       "triggers": [
         "playwright.config.js",
         "playwright.config.ts",
@@ -144,6 +169,35 @@
         "codex": {
           "skills": [
             "skills/verification/playwright-ui"
+          ]
+        }
+      }
+    },
+    {
+      "id": "auto-learning",
+      "name": "Auto Learning",
+      "bucket": "library",
+      "triggers": [
+        "learning",
+        "observations",
+        "instincts"
+      ],
+      "requires": [],
+      "optional": [],
+      "source": {
+        "type": "local",
+        "path": "skills/learning/auto-learning",
+        "license": "MIT"
+      },
+      "runtimes": {
+        "claude": {
+          "skills": [
+            "skills/learning/auto-learning"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "skills/learning/auto-learning"
           ]
         }
       }

@@ -117,6 +117,11 @@ export async function upsertManagedBlock(filePath, blockName, blockContent) {
   return writeTextIfChanged(target, next);
 }
 
+export async function removePath(filePath) {
+  const target = expandHome(filePath);
+  await fs.rm(target, { recursive: true, force: true });
+}
+
 export async function listFilesRecursive(rootDir, { include = [], exclude = [] } = {}) {
   const root = expandHome(rootDir);
   const realRoot = await fs.realpath(root);

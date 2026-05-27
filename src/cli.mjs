@@ -1,5 +1,11 @@
 import { detectProject } from './core/detect-project.mjs';
-import { executeHandoffCreate, executeProjectInit, executeRagIndex, executeSetup } from './core/execute.mjs';
+import {
+  executeHandoffCreate,
+  executeProjectInit,
+  executeRagIndex,
+  executeSetup,
+  executeSkillInstall,
+} from './core/execute.mjs';
 import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
@@ -12,6 +18,7 @@ Usage:
   threadline init [--path <repo>] [--dry-run] [--local|--repo]
   threadline detect [--path <repo>] [--json]
   threadline skills list [--json]
+  threadline skills install [skill-id ...] [--all] [--replace] [--runtimes claude,codex]
   threadline skills recommend [--path <repo>] [--json]
   threadline index [--path <repo>]
   threadline handoff create [--path <repo>] [--title <title>] [--summary <summary>] [--vault <path>]
@@ -46,10 +53,22 @@ export async function main(argv) {
 
   if (command === 'skills') {
     const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'list';
+    const packIds = rest.filter((arg) => !arg.startsWith('--') && arg !== subcommand);
     const registry = await readSkillRegistry();
     if (subcommand === 'list') {
       if (flags.json) console.log(JSON.stringify(registry.packs, null, 2));
       else printSkills(registry.packs);
+      return;
+    }
+    if (subcommand === 'install') {
+      const runtimes = parseList(flags.runtimes || 'claude,codex');
+      const plan = await executeSkillInstall({
+        runtimes,
+        packIds,
+        all: Boolean(flags.all),
+        replace: Boolean(flags.replace),
+      });
+      printPlan(plan);
       return;
     }
     if (subcommand === 'recommend') {

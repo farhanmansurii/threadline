@@ -44,6 +44,9 @@ test('setup --merge writes Claude and Codex basics and is idempotent', async () 
   const first = await run(['setup', '--runtimes', 'claude,codex'], { env });
   assert.match(first.stdout, /CHANGED .*\.claude.*SKILL\.md/);
   assert.match(first.stdout, /CHANGED .*\.codex.*config\.toml/);
+  assert.ok(await exists(path.join(env.HOME, '.claude', 'skills', 'threadline', 'SKILL.md')));
+  assert.ok(await exists(path.join(env.HOME, '.claude', 'commands', 'context.md')));
+  assert.ok(await exists(path.join(env.HOME, '.claude', 'commands', 'learnings.md')));
 
   const second = await run(['setup', '--runtimes', 'claude,codex'], { env });
   assert.match(second.stdout, /OK\s+.*\.claude.*SKILL\.md/);
@@ -90,16 +93,23 @@ test('setup --replace requires --yes', async () => {
   await assert.rejects(run(['setup', '--replace', '--runtimes', 'codex'], { env }), /requires --yes/);
 });
 
-test('setup --replace --yes replaces Codex config', async () => {
+test('setup --replace --yes replaces Codex config and installs all visible skills', async () => {
   const env = await isolatedEnv();
   await fs.mkdir(path.join(env.HOME, '.codex'), { recursive: true });
   await fs.writeFile(path.join(env.HOME, '.codex', 'config.toml'), '[features]\nold = true\n');
 
-  await run(['setup', '--replace', '--yes', '--runtimes', 'codex'], { env });
+  await run(['setup', '--replace', '--yes', '--runtimes', 'claude,codex'], { env });
 
   const config = await fs.readFile(path.join(env.HOME, '.codex', 'config.toml'), 'utf8');
   assert.match(config, /BEGIN THREADLINE_MANAGED/);
   assert.doesNotMatch(config, /old = true/);
+  assert.ok(await exists(path.join(env.HOME, '.codex', 'skills', 'threadline', 'SKILL.md')));
+  assert.ok(await exists(path.join(env.HOME, '.codex', 'skills', 'react-vite', 'SKILL.md')));
+  assert.ok(await exists(path.join(env.HOME, '.claude', 'skills', 'react-vite', 'SKILL.md')));
+  assert.ok(await exists(path.join(env.HOME, '.claude', 'skills', 'diagnose', 'SKILL.md')));
+  assert.ok(await exists(path.join(env.HOME, '.claude', 'commands', 'context.md')));
+  assert.ok(await exists(path.join(env.HOME, '.claude', 'commands', 'learnings.md')));
+  assert.ok(await exists(path.join(env.HOME, '.claude', 'commands', 'ui-check.md')));
 });
 
 test('index writes a RAG manifest', async () => {
@@ -187,4 +197,13 @@ async function listFiles(dir) {
   }
   await walk(dir);
   return out;
+}
+
+async function exists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }

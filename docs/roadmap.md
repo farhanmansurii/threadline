@@ -16,6 +16,11 @@
 - install Codex skills/config
 - export/import profile
 
+Current alpha support:
+
+- `init --local` writes external project profiles.
+- `setup --merge` installs Threadline core skill/commands for Claude and core skill/managed config for Codex.
+
 ## Phase 3: Knowledge Layer
 
 - Obsidian vault writer

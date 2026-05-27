@@ -11,4 +11,10 @@ export function printPlan(plan) {
     console.log('');
     for (const note of plan.notes) console.log(`NOTE   ${note}`);
   }
+  if (plan.results?.length) {
+    console.log('');
+    for (const result of plan.results) {
+      console.log(`${result.changed ? 'CHANGED' : 'OK'.padEnd(7)} ${result.target}`);
+    }
+  }
 }

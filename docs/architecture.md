@@ -53,15 +53,17 @@ The ID is a stable 12-character hash. This lets the same repo resolve to the sam
 
 ```text
 ~/.local/share/threadline/projects/<project-id>/
-├── project-profile.json
-├── generated/
-│   ├── AGENTS.generated.md
-│   ├── codex.generated.toml
-│   └── claude.generated.json
-├── rag/
-├── handoffs/
-├── knowledge-graph/
-└── learnings/
+└── workspaces/
+    └── <workspace-id>/
+        ├── project-profile.json
+        ├── generated/
+        │   ├── AGENTS.generated.md
+        │   ├── codex.generated.toml
+        │   └── claude.generated.json
+        ├── rag/
+        ├── handoffs/
+        ├── knowledge-graph/
+        └── learnings/
 ```
 
 This keeps git history clean while still allowing project-aware behavior.

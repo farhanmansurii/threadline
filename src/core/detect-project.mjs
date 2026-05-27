@@ -15,6 +15,7 @@ export async function detectProject(inputPath) {
 
   return {
     id: stableId(idSource),
+    workspaceId: stableId(root),
     name,
     root,
     remote,

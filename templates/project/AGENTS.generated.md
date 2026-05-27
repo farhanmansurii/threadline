@@ -16,4 +16,4 @@ Stacks: {{stacks}}
 
 ## Safety
 
-Do not write generated Threadline files into the repo unless `threadline init --repo` was explicitly used.
+Do not write generated Threadline files into the repo unless repo materialization is explicitly enabled.

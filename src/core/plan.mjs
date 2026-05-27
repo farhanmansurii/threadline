@@ -14,8 +14,7 @@ export function createSetupPlan({ mode, runtimes, dryRun }) {
     actions.push(
       write('~/.claude/skills/threadline', 'Install Claude skill entrypoint'),
       write('~/.claude/commands/handoff.md', 'Install Claude handoff command'),
-      write('~/.claude/commands/resume.md', 'Install Claude resume command'),
-      merge('~/.claude/settings.json', 'Merge Threadline-managed hooks/settings')
+      write('~/.claude/commands/resume.md', 'Install Claude resume command')
     );
   }
 
@@ -40,7 +39,7 @@ export function createSetupPlan({ mode, runtimes, dryRun }) {
 
 export function createProjectPlan({ profile, mode, dryRun }) {
   const paths = getThreadlinePaths();
-  const projectDir = path.join(paths.projectsDir, profile.id);
+  const projectDir = path.join(paths.projectsDir, profile.id, 'workspaces', profile.workspaceId);
   const actions = [
     write(projectDir, 'Create external project profile directory'),
     write(path.join(projectDir, 'project-profile.json'), 'Store detected project profile outside repo'),

@@ -7,7 +7,7 @@ Threadline separates human-readable knowledge from generated retrieval indexes.
 Use LightRAG or another configured RAG backend for project retrieval. Store generated indexes under:
 
 ```text
-~/.local/share/threadline/projects/<project-id>/rag/
+~/.local/share/threadline/projects/<project-id>/workspaces/<workspace-id>/rag/
 ```
 
 Index source policy is project-specific and generated from detection:

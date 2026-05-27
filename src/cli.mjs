@@ -1,4 +1,5 @@
 import { detectProject } from './core/detect-project.mjs';
+import { executeProjectInit, executeSetup } from './core/execute.mjs';
 import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
@@ -60,22 +61,21 @@ export async function main(argv) {
   }
 
   if (command === 'setup') {
-    const plan = createSetupPlan({
-      mode: flags.replace ? 'replace' : flags.adopt ? 'adopt' : 'merge',
-      runtimes: parseList(flags.runtimes || 'claude,codex'),
-      dryRun: flags.dryRun !== false,
-    });
+    const mode = flags.replace ? 'replace' : flags.adopt ? 'adopt' : 'merge';
+    const runtimes = parseList(flags.runtimes || 'claude,codex');
+    const plan = flags.dryRun
+      ? createSetupPlan({ mode, runtimes, dryRun: true })
+      : await executeSetup({ mode, runtimes });
     printPlan(plan);
     return;
   }
 
   if (command === 'init') {
     const profile = await detectProject(flags.path || process.cwd());
-    const plan = createProjectPlan({
-      profile,
-      mode: flags.repo ? 'repo' : 'local',
-      dryRun: flags.dryRun !== false,
-    });
+    const mode = flags.repo ? 'repo' : 'local';
+    const plan = flags.dryRun
+      ? createProjectPlan({ profile, mode, dryRun: true })
+      : await executeProjectInit({ profile, mode });
     printPlan(plan);
     return;
   }

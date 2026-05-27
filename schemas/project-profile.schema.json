@@ -3,9 +3,10 @@
   "$id": "https://threadline.dev/schemas/project-profile.schema.json",
   "title": "Threadline Project Profile",
   "type": "object",
-  "required": ["id", "name", "root", "stacks", "recommendedPresets"],
+  "required": ["id", "workspaceId", "name", "root", "stacks", "recommendedPresets"],
   "properties": {
     "id": { "type": "string", "minLength": 12, "maxLength": 12 },
+    "workspaceId": { "type": "string", "minLength": 12, "maxLength": 12 },
     "name": { "type": "string" },
     "root": { "type": "string" },
     "remote": { "type": ["string", "null"] },

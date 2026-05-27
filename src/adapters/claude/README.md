@@ -1,8 +1,10 @@
 # Claude Adapter
 
-Planned responsibilities:
+Responsibilities:
 
-- install Threadline skill into `~/.claude/skills`
-- install slash commands into `~/.claude/commands`
-- merge hook/settings blocks with backups once hooks are implemented
-- keep existing user config unless `--replace` is approved
+- Install Threadline skills into `~/.claude/skills`
+- Install slash commands into `~/.claude/commands`
+- Merge hook/settings blocks with backups once hooks are implemented
+- Keep existing user config unless `--replace` is approved
+
+Implemented in `adapter.mjs`.

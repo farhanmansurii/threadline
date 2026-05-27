@@ -1,12 +1,12 @@
 # Threadline
 
-Alpha project setup and skill registry for Claude Code and Codex, with a roadmap for Cursor, OpenCode, Kimi, RAG, and Obsidian handoffs.
+Portable agent runtime manager for Claude Code, Codex, Cursor, OpenCode, Kimi, and any CLI. Skills, project detection, RAG indexing, and Obsidian handoffs — with a generic adapter for runtimes Threadline doesn't know yet.
 
 Threadline is the layer between your machine, your repos, and your AI coding tools. It installs a small shared agent runtime, detects each project dynamically, keeps project state outside git by default, and lets agents resume work through stable handoff IDs.
 
 ## What It Solves
 
-- Keep Claude Code and Codex skills/config portable across machines.
+- Keep skills/config portable across machines and runtimes.
 - Avoid writing agent setup files into every repo unless explicitly requested.
 - Detect project stacks and recommend only the required skill packs.
 - Prepare the project profile and handoff config that future Obsidian/RAG integrations will consume.
@@ -16,9 +16,12 @@ Threadline is the layer between your machine, your repos, and your AI coding too
 
 ```bash
 npx threadline setup --dry-run
-npx threadline setup --merge --runtimes claude,codex
+npx threadline setup --merge --runtimes claude,codex,cursor,kimi
 npx threadline setup --adopt --runtimes claude,codex
 npx threadline setup --replace --yes --runtimes codex
+
+# Generic adapter works for any CLI — just pass the runtime name
+npx threadline setup --merge --runtimes gemini,pi,any-cli
 ```
 
 Inside a project:
@@ -54,9 +57,10 @@ Threadline treats tools as adapters:
 | --- | --- |
 | Claude Code | skills, slash commands, hooks, local settings |
 | Codex | skills, `.codex/config.toml`, MCP config, agent roles |
-| Cursor | planned `.cursor/rules` and project-context bridge |
-| OpenCode | planned rules/config adapter |
-| Kimi | planned knowledge graph/doc generation adapter |
+| Cursor | skills, `.cursor/config.toml`, rules |
+| OpenCode | skills, commands, `.opencode/config.toml` |
+| Kimi | skills, commands, `.kimi/config.toml` |
+| Any CLI | generic adapter creates `~/.<cli>/skills` and `~/.<cli>/commands` |
 
 ## Safety Model
 
@@ -77,4 +81,4 @@ init --repo      # planned explicit repo files
 
 ## Status
 
-This repo is in early alpha. The current CLI supports project detection, skill listing/recommendation, setup dry-runs, local project profile writes, basic Claude/Codex setup writes, adoption reports, guarded replace mode, Obsidian Markdown handoffs, and manifest-based RAG indexing. Setup writes are atomic, idempotent, reject relative XDG state paths, and fail closed on conflicting unmanaged Codex TOML tables. LightRAG embeddings, external skill fetching, `init --repo`, and advanced runtime adapters are intentionally staged behind explicit follow-up work.
+This repo is in early alpha. The current CLI supports project detection, skill listing/recommendation, setup dry-runs, local project profile writes, multi-runtime setup writes (Claude, Codex, Cursor, OpenCode, Kimi, and generic CLI), adoption reports, guarded replace mode, Obsidian Markdown handoffs, and manifest-based RAG indexing. Setup writes are atomic, idempotent, reject relative XDG state paths, and fail closed on conflicting unmanaged Codex TOML tables. LightRAG embeddings, external skill fetching, `init --repo`, and advanced runtime adapters are intentionally staged behind explicit follow-up work.

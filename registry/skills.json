@@ -37,6 +37,33 @@
             "context",
             "learnings"
           ]
+        },
+        "cursor": {
+          "skills": [
+            "skills/core/threadline"
+          ]
+        },
+        "kimi": {
+          "skills": [
+            "skills/core/threadline"
+          ],
+          "commands": [
+            "handoff",
+            "resume",
+            "context",
+            "learnings"
+          ]
+        },
+        "opencode": {
+          "skills": [
+            "skills/core/threadline"
+          ],
+          "commands": [
+            "handoff",
+            "resume",
+            "context",
+            "learnings"
+          ]
         }
       }
     },

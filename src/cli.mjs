@@ -2,6 +2,7 @@ import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import { detectProject } from './core/detect-project.mjs';
 import {
+  executeApplyPreferences,
   executeHandoffCreate,
   executeProjectInit,
   executeRagIndex,
@@ -109,10 +110,43 @@ async function runSetup(flags) {
     if (!confirmed) { p.cancel('Cancelled replace.'); process.exit(0); }
   }
 
+  // ── AI preferences ──
+  let cavemanMode = flags.cavemanMode ?? null;
+  let thinkingEnabled = flags.thinking !== undefined ? Boolean(flags.thinking) : null;
+
+  if (cavemanMode === null && !flags.yes) {
+    p.log.step(chalk.bold('AI preferences'));
+    cavemanMode = guardCancel(
+      await p.select({
+        message: 'Caveman output compression?',
+        options: [
+          { value: 'full',   label: 'Full',   hint: '~65% fewer output tokens  ·  recommended' },
+          { value: 'lite',   label: 'Lite',   hint: '~30% reduction, natural phrasing' },
+          { value: 'ultra',  label: 'Ultra',  hint: '~75% reduction, maximum compression' },
+          { value: 'wenyan', label: 'Wenyan', hint: 'classical concise encoding' },
+          { value: 'off',    label: 'Off',    hint: 'standard verbosity' },
+        ],
+        initialValue: 'full',
+      }),
+    );
+  }
+  cavemanMode ??= 'full';
+
+  if (thinkingEnabled === null && !flags.yes) {
+    thinkingEnabled = guardCancel(
+      await p.confirm({
+        message: 'Enable extended thinking by default?',
+        initialValue: true,
+      }),
+    );
+  }
+  thinkingEnabled ??= true;
+
   // ── dry run ──
   if (flags.dryRun) {
     const plan = createSetupPlan({ mode, runtimes, dryRun: true });
     printPlanInteractive(plan);
+    p.log.info(`Caveman: ${chalk.cyan(cavemanMode)}  ·  extended thinking: ${thinkingEnabled ? chalk.green('on') : chalk.dim('off')}`);
     p.outro(chalk.dim('Dry run — nothing written.'));
     return;
   }
@@ -132,6 +166,29 @@ async function runSetup(flags) {
   }
 
   printResultsNote(plan.results, 'Setup results');
+
+  // ── apply preferences ──
+  const sp = p.spinner();
+  sp.start('Applying preferences…');
+  try {
+    const prefPlan = await executeApplyPreferences({ cavemanMode, thinkingEnabled, runtimes });
+    sp.stop('Preferences applied');
+    printResultsNote(prefPlan.results, 'Preferences');
+  } catch (err) {
+    sp.stop(chalk.yellow('Preferences skipped'));
+    p.log.warn(`Could not apply preferences: ${err.message}`);
+  }
+
+  const cavemanNote = cavemanMode !== 'off'
+    ? `  Caveman ${chalk.cyan(cavemanMode)} compression active every session`
+    : '';
+  const thinkingNote = thinkingEnabled
+    ? `  Extended thinking ${chalk.green('enabled')} by default`
+    : '';
+  if (cavemanNote || thinkingNote) {
+    p.note([cavemanNote, thinkingNote].filter(Boolean).join('\n'), 'Active preferences');
+  }
+
   p.outro(`${chalk.green('✓')}  Setup complete`);
 }
 
@@ -480,7 +537,7 @@ function printHelp() {
 ${chalk.bold('Threadline')} ${chalk.dim('— portable agent runtime manager')}
 
 ${chalk.bold('Usage')}
-  ${chalk.cyan('threadline setup')}     ${chalk.dim('[--merge|--adopt|--replace] [--runtimes claude,codex,cursor,kimi,opencode,...] [--yes] [--dry-run]')}
+  ${chalk.cyan('threadline setup')}     ${chalk.dim('[--merge|--adopt|--replace] [--runtimes claude,codex,cursor,kimi,opencode,...] [--caveman-mode full|lite|ultra|wenyan|off] [--yes] [--dry-run]')}
   ${chalk.cyan('threadline init')}      ${chalk.dim('[--path <dir>] [--local|--repo] [--dry-run]')}
   ${chalk.cyan('threadline detect')}    ${chalk.dim('[--path <dir>] [--json]')}
   ${chalk.cyan('threadline skills')}    ${chalk.dim('list')}
@@ -491,9 +548,11 @@ ${chalk.bold('Usage')}
   ${chalk.cyan('threadline paths')}
 
 ${chalk.bold('Flags')}
-  ${chalk.dim('--dry-run')}    Preview what would be written
-  ${chalk.dim('--json')}       Machine-readable output (also disables interactive mode)
-  ${chalk.dim('--yes')}        Skip confirmations
+  ${chalk.dim('--dry-run')}          Preview what would be written
+  ${chalk.dim('--json')}             Machine-readable output (also disables interactive mode)
+  ${chalk.dim('--yes')}              Skip confirmations (uses defaults: caveman=full, thinking=on)
+  ${chalk.dim('--caveman-mode')}     full|lite|ultra|wenyan|off  (default: full)
+  ${chalk.dim('--thinking')}         true|false  — alwaysThinkingEnabled in settings.json
 
 ${chalk.bold('Pipe / CI')}
   ${chalk.dim('Add --json or pipe stdout to force the plain output mode.')}

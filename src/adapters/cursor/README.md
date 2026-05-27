@@ -1,7 +1,11 @@
 # Cursor Adapter
 
-Planned responsibilities:
+Responsibilities:
 
-- generate `.cursor/rules` from Threadline project profiles
-- bridge handoff/resume context into Cursor-readable docs
-- keep repo writes opt-in
+- Install Threadline skills into `~/.cursor/skills`
+- Manage `~/.cursor/config.toml` with a Threadline-managed block
+- Generate `.cursor/rules` from Threadline project profiles (planned)
+- Bridge handoff/resume context into Cursor-readable docs (planned)
+- Keep repo writes opt-in
+
+Implemented in `adapter.mjs`.

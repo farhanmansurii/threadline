@@ -1,5 +1,6 @@
 import { detectProject } from './core/detect-project.mjs';
 import {
+  executeApplyPreferences,
   executeHandoffCreate,
   executeProjectInit,
   executeRagIndex,
@@ -100,6 +101,14 @@ export async function main(argv) {
       ? createSetupPlan({ mode, runtimes, dryRun: true })
       : await executeSetup({ mode, runtimes });
     printPlan(plan);
+
+    if (!flags.dryRun) {
+      const cavemanMode = flags.cavemanMode ?? 'full';
+      const thinkingEnabled = flags.thinking !== undefined ? flags.thinking !== 'false' : true;
+      const prefPlan = await executeApplyPreferences({ cavemanMode, thinkingEnabled, runtimes });
+      if (flags.json) console.log(JSON.stringify(prefPlan, null, 2));
+      else printPlan(prefPlan);
+    }
     return;
   }
 

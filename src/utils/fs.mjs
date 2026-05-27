@@ -1,6 +1,13 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {
+  listFilesWithFd,
+  readConfigWithDasel,
+  writeConfigWithDasel,
+  deleteConfigWithDasel,
+  readToolPreferences,
+} from './external-tools.mjs';
 
 export async function fileExists(filePath) {
   try {
@@ -117,6 +124,63 @@ export async function upsertManagedBlock(filePath, blockName, blockContent) {
   return writeTextIfChanged(target, next);
 }
 
+/**
+ * Edit a structured config file (JSON, YAML, TOML) using dasel when available.
+ * Falls back to read/modify/write when dasel is not enabled.
+ */
+export async function upsertStructuredConfig(filePath, selector, value, format) {
+  const prefs = await readToolPreferences().catch(() => null);
+  if (prefs?.enabled?.dasel) {
+    try {
+      return await writeConfigWithDasel(expandHome(filePath), selector, value, format);
+    } catch {
+      // dasel failed — fall through to manual method
+    }
+  }
+
+  // Manual fallback: read, parse, modify, write
+  const target = expandHome(filePath);
+  const existing = await readTextIfExists(target);
+  let data = {};
+  if (existing) {
+    try {
+      data = format === 'json' ? JSON.parse(existing) : {};
+    } catch {
+      data = {};
+    }
+  }
+
+  const keys = selector.split('.');
+  let current = data;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i];
+    if (!(key in current) || typeof current[key] !== 'object') {
+      current[key] = {};
+    }
+    current = current[key];
+  }
+  current[keys[keys.length - 1]] = value;
+
+  const content = format === 'json' ? `${JSON.stringify(data, null, 2)}\n` : String(value);
+  return writeTextIfChanged(target, content);
+}
+
+/**
+ * Remove a managed block (# BEGIN name … # END name) from a file.
+ * No-ops if the file or block doesn't exist.
+ */
+export async function removeManagedBlock(filePath, blockName) {
+  const target = expandHome(filePath);
+  const existing = await readTextIfExists(target);
+  if (!existing) return { changed: false, target };
+  const start = `# BEGIN ${blockName}`;
+  const end = `# END ${blockName}`;
+  const pattern = new RegExp(`\\n?${escapeRegExp(start)}[\\s\\S]*?${escapeRegExp(end)}\\n?`);
+  if (!pattern.test(existing)) return { changed: false, target };
+  const next = existing.replace(pattern, '').replace(/\n{3,}/g, '\n\n');
+  return writeTextIfChanged(target, next);
+}
+
 export async function removePath(filePath) {
   const target = expandHome(filePath);
   await fs.rm(target, { recursive: true, force: true });
@@ -124,6 +188,22 @@ export async function removePath(filePath) {
 
 export async function listFilesRecursive(rootDir, { include = [], exclude = [] } = {}) {
   const root = expandHome(rootDir);
+
+  // Try fd when available and user has enabled it
+  const prefs = await readToolPreferences().catch(() => null);
+  if (prefs?.enabled?.fd) {
+    try {
+      const files = await listFilesWithFd(root, { include, exclude });
+      // Filter out secrets and symlinks (fd doesn't know our custom rules)
+      return files.filter((f) => {
+        const relative = path.relative(root, f);
+        return !isSecretPath(relative) && !matchesAny(relative, exclude);
+      });
+    } catch {
+      // fd failed — fall through to JS implementation
+    }
+  }
+
   const realRoot = await fs.realpath(root);
   const out = [];
   async function walk(current) {

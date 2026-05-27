@@ -3,10 +3,18 @@ import chalk from 'chalk';
 import os from 'node:os';
 import path from 'node:path';
 import { detectProject } from '../core/detect-project.mjs';
-import { executeSetup, executeProjectInit, executeApplyPreferences } from '../core/execute.mjs';
+import { executeSetup, executeProjectInit, executeApplyPreferences, executeSkillInstall } from '../core/execute.mjs';
 import { createSetupPlan, createProjectPlan } from '../core/plan.mjs';
 import { getThreadlinePaths } from '../core/paths.mjs';
+import { readSkillRegistry } from '../core/skills.mjs';
 import { detectInstalledRuntimes } from '../utils/detect-runtimes.mjs';
+import {
+  detectInstalledTools,
+  readToolPreferences,
+  writeToolPreferences,
+  generateToolStackInstructions,
+  TOOL_REGISTRY,
+} from '../utils/external-tools.mjs';
 import { fileExists, readJsonIfExists } from '../utils/fs.mjs';
 import {
   splash,
@@ -24,7 +32,7 @@ import {
   renderTable,
 } from '../utils/ascii.mjs';
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 export async function onboardCommand(flags = {}) {
   // ── 0. Splash ──────────────────────────────────────────────────────────────
@@ -44,6 +52,7 @@ export async function onboardCommand(flags = {}) {
   const nodeVersion = process.version;
   const nodeOk = parseInt(nodeVersion.slice(1), 10) >= 20;
   const detectedRuntimes = await detectInstalledRuntimes();
+  const detectedTools = await detectInstalledTools();
   const hasGit = await commandExists('git');
 
   s1.stop(`${step1}  ${nodeOk ? statusOk('Node ' + nodeVersion) : statusWarn('Node ' + nodeVersion)}`);
@@ -64,6 +73,13 @@ export async function onboardCommand(flags = {}) {
 
   if (notInstalled.length) {
     p.log.message(muted(`Other runtimes available:\n` + renderRuntimeList(notInstalled)));
+  }
+
+  // Show detected tools
+  const installedTools = detectedTools.filter((t) => t.installed);
+  if (installedTools.length) {
+    p.log.success(`Found ${highlight(installedTools.length)} modern CLI tool(s):`);
+    p.log.message(renderToolList(installedTools));
   }
 
   // ── 2. Runtime Selection ───────────────────────────────────────────────────
@@ -220,9 +236,70 @@ export async function onboardCommand(flags = {}) {
     }
   }
 
-  // ── 6. Execute ─────────────────────────────────────────────────────────────
-  const step6 = stepLabel(6, TOTAL_STEPS, '⚡ Installing…');
+  // ── 5b. Tool Stack Selection ───────────────────────────────────────────────
+  let toolPrefs = await readToolPreferences();
+  const availableTools = detectedTools.filter((t) => t.installed);
+  if (availableTools.length && !flags.yes) {
+    const step5b = stepLabel(5, TOTAL_STEPS, '🔧 Modern CLI tools');
+    p.log.info(step5b);
+
+    const enabledToolIds = guardCancel(
+      await p.multiselect({
+        message: 'Which modern CLI tools should Threadline use?',
+        options: availableTools.map((t) => ({
+          value: t.id,
+          label: `${t.name}${muted(`  (${t.replaces})`)}`,
+          hint: t.description.slice(0, 60),
+        })),
+        initialValues: Object.entries(toolPrefs.enabled)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
+      }),
+    );
+
+    for (const tool of TOOL_REGISTRY) {
+      toolPrefs.enabled[tool.id] = enabledToolIds.includes(tool.id);
+    }
+    toolPrefs.agentInstructions = true;
+    await writeToolPreferences(toolPrefs);
+  } else if (flags.yes && availableTools.length) {
+    // In --yes mode, auto-enable all detected tools
+    for (const tool of availableTools) {
+      toolPrefs.enabled[tool.id] = true;
+    }
+    toolPrefs.agentInstructions = true;
+    await writeToolPreferences(toolPrefs);
+  }
+
+  // ── 6. Skill Picks ─────────────────────────────────────────────────────────
+  const step6 = stepLabel(6, TOTAL_STEPS, '📚 Recommended skills');
   p.log.info(step6);
+
+  let selectedPackIds = [];
+  if (!flags.dryRun && !flags.yes) {
+    const registry = await readSkillRegistry();
+    const libraryPacks = registry.packs.filter((p) => p.bucket === 'library');
+    if (libraryPacks.length) {
+      const defaults = ['humanizer', 'impeccable', 'superpowers', 'caveman'];
+      selectedPackIds = guardCancel(
+        await p.multiselect({
+          message: 'Which recommended skills do you want to install?',
+          options: libraryPacks.map((pack) => ({
+            value: pack.id,
+            label: pack.name,
+            hint: pack.source?.repo ? `github:${pack.source.repo}` : 'local',
+          })),
+          initialValues: defaults.filter((id) => libraryPacks.some((p) => p.id === id)),
+        }),
+      );
+    }
+  } else if (flags.yes) {
+    selectedPackIds = ['humanizer', 'impeccable', 'superpowers', 'caveman'];
+  }
+
+  // ── 7. Execute ─────────────────────────────────────────────────────────────
+  const step7 = stepLabel(7, TOTAL_STEPS, '⚡ Installing…');
+  p.log.info(step7);
 
   if (flags.dryRun) {
     const plan = createSetupPlan({ mode, runtimes, dryRun: true });
@@ -281,8 +358,22 @@ export async function onboardCommand(flags = {}) {
     printResults(initResult.results);
   }
 
+  // Install selected skills
+  if (selectedPackIds.length) {
+    const ss = p.spinner();
+    ss.start('Installing skills…');
+    try {
+      const skillPlan = await executeSkillInstall({ runtimes, packIds: selectedPackIds, replace: false });
+      ss.stop(statusOk('Skills installed'));
+      printResults(skillPlan.results);
+    } catch (err) {
+      ss.stop(statusWarn('Skills skipped'));
+      p.log.warn(err.message);
+    }
+  }
+
   // ── Summary ────────────────────────────────────────────────────────────────
-  printSummary({ runtimes, mode, profile, initProject, cavemanMode, thinkingEnabled });
+  printSummary({ runtimes, mode, profile, initProject, cavemanMode, thinkingEnabled, installedSkills: selectedPackIds });
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -332,12 +423,76 @@ function printResults(results = []) {
   if (!results.length) return;
   const changed = results.filter((r) => r.changed);
   const unchanged = results.filter((r) => !r.changed).length;
-  const lines = changed.map((r) => `  ${chalk.green('✓')}  ${path.basename(r.target) || r.target}`);
-  if (unchanged > 0) lines.push(chalk.dim(`     …${unchanged} already up to date`));
-  if (lines.length) p.log.message(lines.join('\n'));
+  if (!changed.length && !unchanged) return;
+
+  // Group by runtime / category
+  const groups = groupResultsByRuntime(changed);
+  const lines = [];
+
+  for (const [runtime, items] of Object.entries(groups)) {
+    const runtimeLabel = runtime === 'other' ? 'General' : runtime.charAt(0).toUpperCase() + runtime.slice(1);
+    lines.push(chalk.bold.cyan(`  ${runtimeLabel}`));
+
+    const configs = items.filter((i) => i.category === 'config');
+    const commands = items.filter((i) => i.category === 'command');
+    const skills = items.filter((i) => i.category === 'skill');
+    const projects = items.filter((i) => i.category === 'project');
+
+    if (configs.length) {
+      lines.push(...configs.map((c) => `    ${chalk.green('✓')}  ${chalk.dim('config')}  ${path.basename(c.target)}`));
+    }
+    if (commands.length) {
+      lines.push(...commands.map((c) => `    ${chalk.green('✓')}  ${chalk.dim('cmd')}    ${path.basename(c.target)}`));
+    }
+    if (skills.length) {
+      const byPack = skills.reduce((acc, s) => {
+        const parts = s.target.split(path.sep);
+        const idx = parts.indexOf('skills');
+        const pack = idx >= 0 && parts[idx + 1] ? parts[idx + 1] : 'unknown';
+        (acc[pack] ??= []).push(s);
+        return acc;
+      }, {});
+      for (const [pack, packItems] of Object.entries(byPack)) {
+        lines.push(`    ${chalk.green('✓')}  ${chalk.dim('skill')}  ${pack}  ${chalk.dim(`(${packItems.length} file${packItems.length > 1 ? 's' : ''})`)}`);
+      }
+    }
+    if (projects.length) {
+      lines.push(...projects.map((c) => `    ${chalk.green('✓')}  ${chalk.dim('project')}  ${path.basename(c.target)}`));
+    }
+  }
+
+  if (unchanged > 0) {
+    lines.push(chalk.dim(`     …${unchanged} already up to date`));
+  }
+
+  p.log.message(lines.join('\n'));
 }
 
-function printSummary({ runtimes, mode, profile, initProject, cavemanMode, thinkingEnabled }) {
+function groupResultsByRuntime(results) {
+  const groups = { other: [] };
+  for (const r of results) {
+    const t = r.target || '';
+    let runtime = 'other';
+    if (t.includes('.claude')) runtime = 'claude';
+    else if (t.includes('.codex')) runtime = 'codex';
+    else if (t.includes('.cursor')) runtime = 'cursor';
+    else if (t.includes('.kimi')) runtime = 'kimi';
+    else if (t.includes('.opencode')) runtime = 'opencode';
+    else if (t.includes('.gemini')) runtime = 'gemini';
+    else if (t.includes('/projects/')) runtime = 'project';
+
+    let category = 'other';
+    if (t.includes('/commands/')) category = 'command';
+    else if (t.includes('/skills/')) category = 'skill';
+    else if (t.includes('/config.') || t.endsWith('.json') && t.includes('/threadline/')) category = 'config';
+    else if (t.includes('/projects/')) category = 'project';
+
+    (groups[runtime] ??= []).push({ ...r, category });
+  }
+  return groups;
+}
+
+function printSummary({ runtimes, mode, profile, initProject, cavemanMode, thinkingEnabled, installedSkills = [] }) {
   const runtimesStr = runtimes.map((r) => chalk.cyan(r)).join(', ');
   const prefLines = [];
   if (cavemanMode && cavemanMode !== 'off') {
@@ -345,6 +500,9 @@ function printSummary({ runtimes, mode, profile, initProject, cavemanMode, think
   }
   if (thinkingEnabled !== undefined) {
     prefLines.push({ label: 'Thinking', value: thinkingEnabled ? chalk.green('on') : chalk.dim('off') });
+  }
+  if (installedSkills.length) {
+    prefLines.push({ label: 'Skills', value: installedSkills.map((s) => chalk.cyan(s)).join(', ') });
   }
 
   const lines = [
@@ -367,12 +525,24 @@ function printSummary({ runtimes, mode, profile, initProject, cavemanMode, think
     `    ${code('threadline handoff create --title "my feature"')}`,
     `    ${code('threadline skills recommend')}`,
     `    ${code('threadline index')}`,
+    `    ${code('threadline tools list')}`,
     '',
-    `  ${sectionTitle('Resume anytime')}`,
-    `    ${muted('Use your handoff resume ID in any supported agent.')}`,
+    `  ${sectionTitle('Modern tools')}`,
+    `    ${muted('Run `threadline tools list` to see available CLI accelerators.')}`,
     '',
     divider(),
   ];
 
   console.log(lines.join('\n'));
+}
+
+function renderToolList(tools) {
+  return tools
+    .map((t) => {
+      const icon = chalk.green('●');
+      const name = chalk.white(t.name);
+      const replaces = chalk.dim(`  (replaces ${t.replaces})`);
+      return `   ${icon}  ${name}${replaces}`;
+    })
+    .join('\n');
 }

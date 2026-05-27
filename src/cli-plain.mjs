@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { detectProject } from './core/detect-project.mjs';
 import {
   executeApplyPreferences,
@@ -13,7 +15,9 @@ import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs'
 import { normalizeRuntimes } from './adapters/index.mjs';
 import { printPlan } from './utils/print.mjs';
 
-const HELP = `Threadline
+const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+
+const HELP = `Threadline v${VERSION}
 
 Usage:
   threadline setup [--dry-run] [--merge|--adopt|--replace] [--runtimes claude,codex,cursor,kimi,opencode,...]
@@ -22,6 +26,9 @@ Usage:
   threadline skills list [--json]
   threadline skills install [skill-id ...] [--all] [--replace] [--runtimes claude,codex,cursor,kimi,opencode,...]
   threadline skills recommend [--path <repo>] [--json]
+  threadline tools list [--json]
+  threadline tools detect
+  threadline tools enable <tool-id> [--runtimes claude,codex,...]
   threadline index [--path <repo>]
   threadline handoff create [--path <repo>] [--title <title>] [--summary <summary>] [--vault <path>]
   threadline paths
@@ -36,8 +43,13 @@ export async function main(argv) {
   const [command = 'help', ...rest] = argv;
   const flags = parseFlags(rest);
 
-  if (command === 'help' || flags.help) {
+  if (command === 'help' || command === '--help' || command === '-h' || flags.help) {
     console.log(HELP);
+    return;
+  }
+
+  if (command === '--version' || command === '-v' || flags.version) {
+    console.log(VERSION);
     return;
   }
 
@@ -157,6 +169,70 @@ export async function main(argv) {
       ? createProjectPlan({ profile, mode, dryRun: true })
       : await executeProjectInit({ profile, mode });
     printPlan(plan);
+    return;
+  }
+
+  if (command === 'tools') {
+    const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'list';
+    const { detectInstalledTools, readToolPreferences, TOOL_REGISTRY } = await import('./utils/external-tools.mjs');
+
+    if (subcommand === 'list') {
+      const detected = await detectInstalledTools();
+      const prefs = await readToolPreferences();
+      if (flags.json) {
+        console.log(JSON.stringify({ tools: detected, preferences: prefs }, null, 2));
+        return;
+      }
+      console.log('Installed tools');
+      for (const tool of detected.filter((t) => t.installed)) {
+        const enabled = prefs.enabled[tool.id] ? '● enabled' : '○ disabled';
+        console.log(`  ${tool.id.padEnd(14)} ${enabled}  ${tool.description}`);
+      }
+      console.log('\nAvailable (not installed)');
+      for (const tool of detected.filter((t) => !t.installed)) {
+        console.log(`  ${tool.id.padEnd(14)} ○ not installed  ${tool.description}`);
+      }
+      return;
+    }
+
+    if (subcommand === 'detect') {
+      const detected = await detectInstalledTools();
+      const installed = detected.filter((t) => t.installed);
+      console.log(`Found ${installed.length} tools`);
+      for (const tool of installed) {
+        console.log(`  ✓  ${tool.name}  ${tool.description}`);
+      }
+      return;
+    }
+
+    if (subcommand === 'enable') {
+      const toolId = rest.find((arg) => !arg.startsWith('--') && arg !== subcommand);
+      if (!toolId) throw new Error('Usage: threadline tools enable <tool-id>');
+      const detected = await detectInstalledTools();
+      const tool = detected.find((t) => t.id === toolId);
+      if (!tool) throw new Error(`Unknown tool: ${toolId}`);
+      if (!tool.installed) throw new Error(`${tool.name} is not installed.`);
+
+      const { readToolPreferences, writeToolPreferences } = await import('./utils/external-tools.mjs');
+      const prefs = await readToolPreferences();
+      prefs.enabled[toolId] = true;
+      await writeToolPreferences(prefs);
+      console.log(`✓ ${tool.name} enabled`);
+      return;
+    }
+
+    throw new Error(`Unknown tools command: ${subcommand}\n\n${HELP}`);
+  }
+
+  if (command === 'preferences') {
+    const subcommand = rest.find((a) => !a.startsWith('--')) ?? 'set';
+    if (subcommand !== 'set') throw new Error(`Unknown preferences command: ${subcommand}`);
+    const runtimes = normalizeRuntimes(parseList(flags.runtimes || 'claude,codex'));
+    const cavemanMode = flags.cavemanMode ?? 'full';
+    const thinkingEnabled = flags.thinking !== undefined ? flags.thinking !== 'false' : true;
+    const prefPlan = await executeApplyPreferences({ cavemanMode, thinkingEnabled, runtimes });
+    if (flags.json) console.log(JSON.stringify(prefPlan, null, 2));
+    else printPlan(prefPlan);
     return;
   }
 

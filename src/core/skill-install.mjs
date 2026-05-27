@@ -115,10 +115,13 @@ async function installPackForRuntime(pack, runtime, adapter) {
   const runtimeSpec = pack.runtimes?.[runtime] || {};
   const commands = runtimeSpec.commands ?? (pack.id === 'threadline-core' ? ['handoff', 'resume', 'context', 'learnings'] : []);
 
+  // Command stubs must not overwrite the pack's own skill directory.
+  const safeCommands = commands.filter((cmd) => cmd !== pack.id);
+
   if (source?.type === 'local') {
     const sourceDir = path.join(ROOT, source.path);
     const skillResults = await adapter.installSkills(sourceDir);
-    const commandResults = await adapter.installCommands(commands);
+    const commandResults = await adapter.installCommands(safeCommands);
     return [...skillResults, ...commandResults];
   }
 
@@ -128,7 +131,7 @@ async function installPackForRuntime(pack, runtime, adapter) {
       const targetDir = path.join(adapter.homeDir, 'skills', pack.id);
       await ensureDir(targetDir);
       const result = await writeTextIfChanged(path.join(targetDir, 'SKILL.md'), content);
-      const commandResults = await adapter.installCommands(commands);
+      const commandResults = await adapter.installCommands(safeCommands);
       return [result, ...commandResults];
     }
     // Network unavailable or repo structure mismatch — fall through to stub below.
@@ -139,19 +142,25 @@ async function installPackForRuntime(pack, runtime, adapter) {
   await ensureDir(targetDir);
   const wrapper = await createWrapperSkill(pack, runtime);
   const result = await writeTextIfChanged(path.join(targetDir, 'SKILL.md'), wrapper);
-  const commandResults = await adapter.installCommands(commands);
+  const commandResults = await adapter.installCommands(safeCommands);
   return [result, ...commandResults];
 }
 
 async function fetchGithubSkill(repo, skill) {
-  // Try the two most common layouts in mattpocock/skills-style repos.
+  // Try common layouts: repo root, skills dir, .claude/skills dir, and raw root.
   const candidates = [
     `https://raw.githubusercontent.com/${repo}/main/${skill}/SKILL.md`,
     `https://raw.githubusercontent.com/${repo}/main/skills/${skill}/SKILL.md`,
+    `https://raw.githubusercontent.com/${repo}/main/.claude/skills/${skill}/SKILL.md`,
+    `https://raw.githubusercontent.com/${repo}/main/SKILL.md`,
   ];
   for (const url of candidates) {
-    const response = await fetch(url);
-    if (response.ok) return response.text();
+    try {
+      const response = await fetch(url);
+      if (response.ok) return response.text();
+    } catch {
+      // continue to next candidate
+    }
   }
   throw new Error(`GitHub skill not found: ${repo}#${skill} (tried ${candidates.length} URLs)`);
 }

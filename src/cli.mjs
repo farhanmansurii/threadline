@@ -1,5 +1,8 @@
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
+import path from 'node:path';
+import { readFileSync } from 'node:fs';
+import { readTextIfExists } from './utils/fs.mjs';
 import { detectProject } from './core/detect-project.mjs';
 import {
   executeApplyPreferences,
@@ -15,6 +18,15 @@ import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
 import { listAdapters, normalizeRuntimes } from './adapters/index.mjs';
 import { onboardCommand } from './commands/onboard.mjs';
+import {
+  detectInstalledTools,
+  readToolPreferences,
+  writeToolPreferences,
+  generateToolStackInstructions,
+  TOOL_REGISTRY,
+} from './utils/external-tools.mjs';
+
+const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 // ── tiny helpers ──────────────────────────────────────────────────────────────
 
@@ -218,9 +230,9 @@ async function runSkillsInstall(flags, rest) {
 
   // ── all vs pick ──
   let all = Boolean(flags.all);
-  let packIds = [];
+  let packIds = rest.filter((arg) => !arg.startsWith('--') && arg !== 'install');
 
-  if (!all) {
+  if (!all && !packIds.length) {
     const scope = guardCancel(
       await p.select({
         message: 'Which skills do you want to install?',
@@ -539,6 +551,185 @@ async function runHandoff(subcommand, flags) {
   process.exitCode = 1;
 }
 
+async function runTools(subcommand, flags, rest) {
+  if (subcommand === 'list') {
+    const detected = await detectInstalledTools();
+    const prefs = await readToolPreferences();
+
+    if (flags.json) {
+      console.log(JSON.stringify({ tools: detected, preferences: prefs }, null, 2));
+      return;
+    }
+
+    const lines = [];
+    lines.push(chalk.bold('Installed tools'));
+    for (const tool of detected.filter((t) => t.installed)) {
+      const enabled = prefs.enabled[tool.id] ? chalk.green('● enabled') : chalk.dim('○ disabled');
+      lines.push(`  ${chalk.cyan(tool.id.padEnd(14))} ${enabled}  ${chalk.dim(tool.description)}`);
+    }
+
+    lines.push('');
+    lines.push(chalk.bold('Available (not installed)'));
+    for (const tool of detected.filter((t) => !t.installed)) {
+      lines.push(`  ${chalk.dim(tool.id.padEnd(14))} ${chalk.dim('○ not installed')}  ${chalk.dim(tool.description)}`);
+    }
+
+    p.note(lines.join('\n'), `Tool Stack  ${chalk.dim(`(${detected.filter((t) => t.installed).length} installed)`)}`);
+    return;
+  }
+
+  if (subcommand === 'detect') {
+    const s = p.spinner();
+    s.start('Detecting tools…');
+    const detected = await detectInstalledTools();
+    s.stop(`Found ${detected.filter((t) => t.installed).length} tools`);
+
+    const installed = detected.filter((t) => t.installed);
+    if (!installed.length) {
+      p.log.warn('No modern CLI tools detected. Install fd, ripgrep, dasel, etc. to accelerate Threadline.');
+      return;
+    }
+
+    p.log.message(installed.map((t) => `  ${chalk.green('✓')}  ${chalk.cyan(t.name)}  ${chalk.dim(t.description)}`).join('\n'));
+    return;
+  }
+
+  if (subcommand === 'enable') {
+    const toolId = rest.find((arg) => !arg.startsWith('--') && arg !== subcommand);
+    if (!toolId) {
+      p.log.error('Usage: threadline tools enable <tool-id>');
+      process.exitCode = 1;
+      return;
+    }
+    const detected = await detectInstalledTools();
+    const tool = detected.find((t) => t.id === toolId);
+    if (!tool) {
+      p.log.error(`Unknown tool: ${chalk.bold(toolId)}`);
+      process.exitCode = 1;
+      return;
+    }
+    if (!tool.installed) {
+      p.log.error(`${chalk.bold(tool.name)} is not installed. Install it first: ${chalk.cyan(`brew install ${tool.installName}`)}`);
+      process.exitCode = 1;
+      return;
+    }
+
+    const prefs = await readToolPreferences();
+    prefs.enabled[toolId] = true;
+    await writeToolPreferences(prefs);
+
+    // Optionally generate agent instructions for specific runtimes
+    const runtimes = flags.runtimes ? parseList(flags.runtimes) : [];
+    if (runtimes.length) {
+      const instructions = generateToolStackInstructions(prefs, detected);
+      for (const runtime of runtimes) {
+        // Write instructions to runtime-specific location
+        const adapter = (await import('./adapters/index.mjs')).getAdapter(runtime);
+        if (adapter && instructions) {
+          const { writeTextIfChanged } = await import('./utils/fs.mjs');
+          const target = path.join(adapter.homeDir, 'tools.md');
+          await writeTextIfChanged(target, instructions);
+        }
+      }
+      p.outro(`${chalk.green('✓')}  ${tool.name} enabled for ${runtimes.join(', ')}`);
+    } else {
+      p.outro(`${chalk.green('✓')}  ${tool.name} enabled`);
+    }
+    return;
+  }
+
+  p.log.error(`Unknown tools subcommand: ${chalk.bold(subcommand)}`);
+  process.exitCode = 1;
+}
+
+// ── preferences ───────────────────────────────────────────────────────────────
+
+async function runPreferences(subcommand, flags) {
+  if (subcommand !== 'set') {
+    p.log.error(`Unknown preferences subcommand: ${chalk.bold(subcommand)}`);
+    p.log.info(`Usage: ${chalk.cyan('threadline preferences set')} ${chalk.dim('[--caveman-mode <mode>] [--thinking true|false] [--runtimes claude,codex,...]')}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Read current values from config.toml as defaults.
+  const { configDir } = getThreadlinePaths();
+  const configPath = path.join(configDir, 'config.toml');
+  const configText = (await readTextIfExists(configPath)) ?? '';
+  const currentCaveman = (configText.match(/caveman_mode\s*=\s*"([^"]+)"/) ?? [])[1] ?? 'full';
+  const currentThinking = !/extended_thinking\s*=\s*false/.test(configText);
+  const currentRuntimes = (configText.match(/runtimes\s*=\s*\[([^\]]+)\]/) ?? [])[1]
+    ?.split(',').map((s) => s.trim().replace(/"/g, '')).filter(Boolean)
+    ?? ['claude', 'codex'];
+
+  // Resolve values: flags take priority, else prompt interactively.
+  let cavemanMode = flags.cavemanMode ?? null;
+  let thinkingEnabled = flags.thinking !== undefined ? flags.thinking !== 'false' : null;
+  let runtimes = flags.runtimes ? parseList(flags.runtimes) : null;
+
+  if (!flags.yes) {
+    p.intro(chalk.bold('Threadline preferences'));
+
+    if (cavemanMode === null) {
+      cavemanMode = guardCancel(await p.select({
+        message: 'Caveman response compression?',
+        options: [
+          { value: 'full',   label: 'Full',   hint: '~65% fewer tokens  ·  recommended' },
+          { value: 'lite',   label: 'Lite',   hint: '~30% reduction, natural phrasing' },
+          { value: 'ultra',  label: 'Ultra',  hint: '~75% reduction, maximum compression' },
+          { value: 'wenyan', label: 'Wenyan', hint: 'classical concise encoding' },
+          { value: 'off',    label: 'Off',    hint: 'standard verbosity' },
+        ],
+        initialValue: currentCaveman,
+      }));
+    }
+
+    if (thinkingEnabled === null) {
+      thinkingEnabled = guardCancel(await p.confirm({
+        message: 'Enable extended thinking by default?',
+        initialValue: currentThinking,
+      }));
+    }
+
+    if (runtimes === null) {
+      const allAdapters = listAdapters();
+      runtimes = guardCancel(await p.multiselect({
+        message: 'Apply to which runtimes?',
+        options: allAdapters.map((a) => ({ value: a.id, label: a.name })),
+        initialValues: currentRuntimes,
+        required: true,
+      }));
+    }
+  }
+
+  // Apply non-null defaults for any remaining nulls (--yes path).
+  cavemanMode ??= currentCaveman;
+  thinkingEnabled ??= currentThinking;
+  runtimes ??= currentRuntimes;
+
+  const s = p.spinner();
+  s.start('Applying preferences…');
+  let prefPlan;
+  try {
+    prefPlan = await executeApplyPreferences({ cavemanMode, thinkingEnabled, runtimes });
+    s.stop(chalk.green('✓') + '  Preferences applied');
+  } catch (err) {
+    s.stop(chalk.red('Failed'));
+    p.log.error(err.message);
+    process.exitCode = 1;
+    return;
+  }
+
+  printResultsNote(prefPlan.results, 'Updated');
+
+  const notes = [];
+  if (cavemanMode !== 'off') notes.push(`  Caveman ${chalk.cyan(cavemanMode)} active every session`);
+  if (thinkingEnabled) notes.push(`  Extended thinking ${chalk.green('on')}`);
+  if (notes.length) p.note(notes.join('\n'), 'Active preferences');
+
+  p.outro(chalk.dim('Done. Changes apply to all new sessions.'));
+}
+
 // ── display helpers ───────────────────────────────────────────────────────────
 
 /** Show a p.note box with changed/ok lines + summary title. */
@@ -546,8 +737,24 @@ function printResultsNote(results = [], title = 'Results') {
   if (!results.length) return;
   const changed = results.filter((r) => r.changed);
   const unchanged = results.filter((r) => !r.changed).length;
-  const lines = changed.map((r) => `${chalk.green('✓')}  ${r.target}`);
-  if (unchanged > 0) lines.push(chalk.dim(`   …${unchanged} already up to date`));
+
+  // Group by category or runtime
+  const groups = {};
+  for (const r of changed) {
+    const cat = r.category || r.runtime || 'General';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(r);
+  }
+
+  const lines = [];
+  for (const [cat, items] of Object.entries(groups)) {
+    if (Object.keys(groups).length > 1) lines.push(`${chalk.bold(cat)}`);
+    for (const r of items) {
+      lines.push(`  ${chalk.green('✓')}  ${r.name || r.target}`);
+    }
+  }
+  if (unchanged > 0) lines.push(chalk.dim(`  …${unchanged} already up to date`));
+
   p.note(lines.join('\n'), `${title}  ·  ${resultSummary(results)}`);
 }
 
@@ -566,7 +773,7 @@ function printPlanInteractive(plan) {
 
 function printHelp() {
   console.log(`
-${chalk.bold('Threadline')} ${chalk.dim('— portable agent runtime manager')}
+${chalk.bold('Threadline')} ${chalk.dim(`v${VERSION} — portable agent runtime manager`)
 
 ${chalk.bold('Usage')}
   ${chalk.cyan('threadline onboard')}   ${chalk.dim('Interactive first-time setup wizard')}
@@ -576,7 +783,11 @@ ${chalk.bold('Usage')}
   ${chalk.cyan('threadline skills')}    ${chalk.dim('list')}
   ${chalk.cyan('threadline skills')}    ${chalk.dim('install  [--all] [--replace] [--runtimes claude,codex,cursor,kimi,opencode,...] [pack-id ...]')}
   ${chalk.cyan('threadline skills')}    ${chalk.dim('recommend  [--path <dir>]')}
+  ${chalk.cyan('threadline tools')}     ${chalk.dim('list [--json]')}
+  ${chalk.cyan('threadline tools')}     ${chalk.dim('detect')}
+  ${chalk.cyan('threadline tools')}     ${chalk.dim('enable <tool-id> [--runtimes claude,codex,...]')}
   ${chalk.cyan('threadline index')}     ${chalk.dim('[--path <dir>] [--dry-run]')}
+  ${chalk.cyan('threadline preferences')} ${chalk.dim('set  [--caveman-mode full|lite|ultra|wenyan|off] [--thinking true|false] [--runtimes claude,codex,...] [--yes]')}
   ${chalk.cyan('threadline handoff')}   ${chalk.dim('create  [--title <t>] [--summary <s>] [--vault <path>]')}
   ${chalk.cyan('threadline paths')}
 
@@ -604,7 +815,12 @@ export async function main(argv) {
     return plainMain(argv);
   }
 
-  if (command === 'help' || flags.help) { printHelp(); return; }
+  if (command === 'help' || command === '--help' || command === '-h' || flags.help) { printHelp(); return; }
+
+  if (command === '--version' || command === '-v' || flags.version) {
+    console.log(VERSION);
+    return;
+  }
 
   if (command === 'paths') {
     const paths = getThreadlinePaths();
@@ -632,6 +848,18 @@ export async function main(argv) {
   if (command === 'handoff') {
     const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'create';
     await runHandoff(subcommand, flags);
+    return;
+  }
+
+  if (command === 'tools') {
+    const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'list';
+    await runTools(subcommand, flags, rest);
+    return;
+  }
+
+  if (command === 'preferences') {
+    const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'set';
+    await runPreferences(subcommand, flags);
     return;
   }
 

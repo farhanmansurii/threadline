@@ -1,6 +1,7 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { copyDir, ensureDir, expandHome, readTextIfExists, upsertManagedBlock, writeTextIfChanged } from '../../utils/fs.mjs';
-import { readTemplate } from '../../core/templates.mjs';
+import { readTemplate, repoRoot } from '../../core/templates.mjs';
 
 export const id = 'codex';
 export const name = 'Codex';
@@ -94,13 +95,46 @@ export async function finalizeInstall(packs) {
 export async function installConfig({ replace = false } = {}) {
   const configPath = path.join(homeDir, 'config.toml');
   const managed = await readTemplate('templates/codex/config.managed.toml');
+  const configResults = [];
   if (replace) {
-    return [await writeTextIfChanged(configPath, managed.trimEnd() + '\n')];
+    configResults.push(await writeTextIfChanged(configPath, managed.trimEnd() + '\n'));
+  } else {
+    const body = managed
+      .replace('# BEGIN THREADLINE_MANAGED\n', '')
+      .replace('\n# END THREADLINE_MANAGED', '');
+    configResults.push(await upsertManagedBlock(configPath, 'THREADLINE_MANAGED', body));
   }
-  const body = managed
-    .replace('# BEGIN THREADLINE_MANAGED\n', '')
-    .replace('\n# END THREADLINE_MANAGED', '');
-  return [await upsertManagedBlock(configPath, 'THREADLINE_MANAGED', body)];
+  const agentResults = await installAgents();
+  return [...configResults, ...agentResults];
+}
+
+/**
+ * Install Codex agent TOML files from templates/codex/agents/ to ~/.codex/agents/.
+ *
+ * These define named agent roles (Explorer, Reviewer, Docs Researcher) that Codex
+ * surfaces in its agent picker. Each file is written idempotently — only changed
+ * files trigger a write action.
+ */
+async function installAgents() {
+  const ROOT = repoRoot();
+  const agentsTemplateDir = path.join(ROOT, 'templates', 'codex', 'agents');
+  const targetDir = path.join(homeDir, 'agents');
+  await ensureDir(targetDir);
+
+  let entries;
+  try {
+    entries = await fs.readdir(agentsTemplateDir);
+  } catch {
+    return [];
+  }
+
+  const results = [];
+  for (const entry of entries) {
+    if (!entry.endsWith('.toml')) continue;
+    const content = await readTemplate(`templates/codex/agents/${entry}`);
+    results.push(await writeTextIfChanged(path.join(targetDir, entry), content));
+  }
+  return results;
 }
 
 export async function adopt() {

@@ -6,6 +6,7 @@ import { getThreadlinePaths } from './paths.mjs';
 import { readTemplate, renderTemplate, repoRoot } from './templates.mjs';
 import { executeSkillInstall as runSkillInstall } from './skill-install.mjs';
 import { getAdapter, normalizeRuntimes } from '../adapters/index.mjs';
+import { installToolStackForRuntimes } from '../utils/tool-stack.mjs';
 import {
   copyDir,
   fileExists,
@@ -15,6 +16,7 @@ import {
   readJsonArrayIfExists,
   readJsonIfExists,
   readTextIfExists,
+  removeManagedBlock,
   upsertManagedBlock,
   writeJsonIfChanged,
   writeTextIfChanged,
@@ -56,6 +58,9 @@ export async function executeSetup({ mode, runtimes }) {
     const corePlan = await runSkillInstall({ runtimes: normalized, packIds: ['threadline-core'], replace: false });
     results.push(...(corePlan.results ?? []));
   }
+
+  // Inject tool stack instructions into agent skills
+  results.push(...(await installToolStackForRuntimes(normalized)));
 
   return {
     ...createSetupPlan({ mode, runtimes: normalized, dryRun: false }),
@@ -486,20 +491,34 @@ function defaultConfig() {
  *
  * Writes:
  *   ~/.claude/skills/caveman-response/SKILL.md  — if caveman enabled + claude runtime
- *   ~/.claude/settings.json                      — if alwaysThinkingEnabled set + claude runtime
+ *   ~/.claude/statusline-caveman.sh              — status line script (caveman enabled + claude)
+ *   ~/.claude/hooks/caveman-inject.sh            — UserPromptSubmit hook script (caveman enabled + claude)
+ *   ~/.claude/settings.json                      — alwaysThinkingEnabled, statusLine, hooks
  *   ~/.config/threadline/config.toml             — [preferences] managed block
  */
 export async function executeApplyPreferences({ cavemanMode = 'off', thinkingEnabled, runtimes = [] }) {
   const results = [];
   const claudeEnabled = runtimes.includes('claude');
 
-  // 1. Caveman response skill for Claude Code
+  // 1. Caveman response skill + shell scripts for Claude Code
   if (cavemanMode !== 'off' && claudeEnabled) {
     const skillPath = expandHome('~/.claude/skills/caveman-response/SKILL.md');
     results.push(await writeTextIfChanged(skillPath, buildCavemanSkillMd(cavemanMode)));
+
+    // Status line script
+    const statuslinePath = expandHome('~/.claude/statusline-caveman.sh');
+    const slResult = await writeTextIfChanged(statuslinePath, buildStatuslineScript());
+    results.push(slResult);
+    await fs.chmod(statuslinePath, 0o755);
+
+    // UserPromptSubmit inject script
+    const hookScriptPath = expandHome('~/.claude/hooks/caveman-inject.sh');
+    const hsResult = await writeTextIfChanged(hookScriptPath, buildCavemanInjectScript());
+    results.push(hsResult);
+    await fs.chmod(hookScriptPath, 0o755);
   }
 
-  // 2. Extended thinking + statusLine for Claude Code
+  // 2. Extended thinking + statusLine + UserPromptSubmit hook for Claude Code
   if (claudeEnabled) {
     const settingsPath = expandHome('~/.claude/settings.json');
     const existing = (await readJsonIfExists(settingsPath)) ?? {};
@@ -507,7 +526,6 @@ export async function executeApplyPreferences({ cavemanMode = 'off', thinkingEna
     if (thinkingEnabled !== undefined) {
       next.alwaysThinkingEnabled = Boolean(thinkingEnabled);
     }
-    // Add a caveman status line that runs a script to display the active mode.
     // statusLine must be { type: "command", command: "..." } — not a plain string.
     const scriptPath = expandHome('~/.claude/statusline-caveman.sh');
     if (cavemanMode !== 'off') {
@@ -518,10 +536,25 @@ export async function executeApplyPreferences({ cavemanMode = 'off', thinkingEna
         delete next.statusLine;
       }
     }
+    // Wire (or remove) the UserPromptSubmit hook that injects caveman instructions.
+    const hookScriptPath = expandHome('~/.claude/hooks/caveman-inject.sh');
+    upsertCavemanHook(next, cavemanMode !== 'off' ? hookScriptPath : null);
     results.push(await writeJsonIfChanged(settingsPath, next));
   }
 
-  // 3. Preferences block in config.toml
+  // 3. Codex: inject/remove caveman block in ~/.codex/AGENTS.md
+  //    Codex has no hook system; AGENTS.md is global system context read every session.
+  const codexEnabled = runtimes.includes('codex');
+  if (codexEnabled) {
+    const agentsMdPath = expandHome('~/.codex/AGENTS.md');
+    if (cavemanMode !== 'off') {
+      results.push(await upsertManagedBlock(agentsMdPath, 'threadline-caveman', buildCavemanAgentsBlock(cavemanMode)));
+    } else {
+      results.push(await removeManagedBlock(agentsMdPath, 'threadline-caveman'));
+    }
+  }
+
+  // 4. Preferences block in config.toml
   const { configDir } = getThreadlinePaths();
   await ensureDir(configDir);
   const configPath = path.join(configDir, 'config.toml');
@@ -534,15 +567,60 @@ export async function executeApplyPreferences({ cavemanMode = 'off', thinkingEna
     dryRun: false,
     actions: [
       ...(cavemanMode !== 'off' && claudeEnabled
-        ? [{ type: 'write', target: '~/.claude/skills/caveman-response/SKILL.md', description: `Caveman ${cavemanMode} mode — auto-activates every session` }]
+        ? [
+            { type: 'write', target: '~/.claude/skills/caveman-response/SKILL.md', description: `Caveman ${cavemanMode} mode skill` },
+            { type: 'write', target: '~/.claude/statusline-caveman.sh', description: 'Status line indicator script' },
+            { type: 'write', target: '~/.claude/hooks/caveman-inject.sh', description: 'UserPromptSubmit hook — auto-injects caveman instructions from message 1' },
+          ]
         : []),
       ...(claudeEnabled && thinkingEnabled !== undefined
         ? [{ type: 'write', target: '~/.claude/settings.json', description: `alwaysThinkingEnabled: ${Boolean(thinkingEnabled)}` }]
+        : []),
+      ...(codexEnabled && cavemanMode !== 'off'
+        ? [{ type: 'write', target: '~/.codex/AGENTS.md', description: `Caveman ${cavemanMode} block — injected as global Codex system context` }]
         : []),
       { type: 'write', target: configPath, description: 'Threadline preferences' },
     ],
     results,
   };
+}
+
+/**
+ * Upsert or remove the Threadline caveman UserPromptSubmit hook in a settings object.
+ * Mutates `settings` in-place — caller writes it to disk.
+ *
+ * @param {object} settings  Parsed ~/.claude/settings.json
+ * @param {string|null} hookCommand  Absolute path to hook script, or null to remove.
+ */
+function upsertCavemanHook(settings, hookCommand) {
+  if (hookCommand) {
+    const entry = {
+      matcher: '',
+      hooks: [
+        {
+          type: 'command',
+          command: hookCommand,
+          description: 'Inject caveman-response instructions when threadline caveman_mode is active',
+        },
+      ],
+    };
+    if (!settings.hooks) settings.hooks = {};
+    if (!Array.isArray(settings.hooks.UserPromptSubmit)) settings.hooks.UserPromptSubmit = [];
+    // Deduplicate: remove any existing entry for this command, then append.
+    settings.hooks.UserPromptSubmit = settings.hooks.UserPromptSubmit.filter(
+      (e) => !e.hooks?.some((h) => h.command === hookCommand),
+    );
+    settings.hooks.UserPromptSubmit.push(entry);
+  } else {
+    // Remove our hook; clean up empty containers.
+    if (!settings.hooks?.UserPromptSubmit) return;
+    const injPath = expandHome('~/.claude/hooks/caveman-inject.sh');
+    settings.hooks.UserPromptSubmit = settings.hooks.UserPromptSubmit.filter(
+      (e) => !e.hooks?.some((h) => h.command === injPath),
+    );
+    if (settings.hooks.UserPromptSubmit.length === 0) delete settings.hooks.UserPromptSubmit;
+    if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
+  }
 }
 
 /** Build a caveman SKILL.md that auto-activates at the given mode every Claude Code session. */
@@ -625,6 +703,69 @@ Never compress:
 - Quoted strings.
 
 ${body}
+`;
+}
+
+/**
+ * Markdown block injected into ~/.codex/AGENTS.md for caveman mode.
+ * Codex has no hook system — AGENTS.md is the global system context read every session.
+ */
+function buildCavemanAgentsBlock(mode) {
+  const modeTitle = { lite: 'Lite', full: 'Full', ultra: 'Ultra', wenyan: 'Wenyan' }[mode] ?? mode;
+  // Reuse the same SKILL.md body (strip frontmatter) so instructions stay in sync.
+  // We inline the content rather than referencing the file — AGENTS.md is static.
+  const skillMd = buildCavemanSkillMd(mode);
+  const body = skillMd.replace(/^---[\s\S]*?---\n\n/, '');
+  return `## Caveman Response — ${modeTitle} mode (Threadline)\n\n${body.trim()}`;
+}
+
+/** Shell script written to ~/.claude/statusline-caveman.sh — shows active caveman mode. */
+function buildStatuslineScript() {
+  return `#!/usr/bin/env bash
+# Threadline caveman mode status line indicator
+# Reads caveman_mode from ~/.config/threadline/config.toml
+
+CONFIG="$HOME/.config/threadline/config.toml"
+[ -f "$CONFIG" ] || exit 0
+
+mode=$(grep 'caveman_mode' "$CONFIG" | awk -F'"' '{print $2}' | tail -1)
+
+case "$mode" in
+  ultra)  echo "🗿🗿🗿 cave:ultra"  ;;
+  full)   echo "🗿🗿 cave:full"    ;;
+  lite)   echo "🗿 cave:lite"     ;;
+  wenyan) echo "甲 cave:wenyan"   ;;
+  off|"") ;;  # output nothing when off
+  *)      echo "🗿 cave:$mode"    ;;
+esac
+`;
+}
+
+/**
+ * Shell script written to ~/.claude/hooks/caveman-inject.sh — wired as UserPromptSubmit hook.
+ * Reads active caveman_mode at runtime and outputs SKILL.md body so it is injected
+ * into every session from the first message without a manual /caveman-response.
+ */
+function buildCavemanInjectScript() {
+  return `#!/usr/bin/env bash
+# Threadline caveman auto-inject hook (UserPromptSubmit)
+# Injects caveman-response instructions each session when caveman_mode is active.
+# Reads caveman_mode from ~/.config/threadline/config.toml at runtime.
+
+CONFIG="$HOME/.config/threadline/config.toml"
+SKILL="$HOME/.claude/skills/caveman-response/SKILL.md"
+
+[ -f "$CONFIG" ] || exit 0
+[ -f "$SKILL"  ] || exit 0
+
+mode=$(grep 'caveman_mode' "$CONFIG" | awk -F'"' '{print $2}' | tail -1)
+
+case "$mode" in
+  off|"") exit 0 ;;
+esac
+
+# Strip YAML frontmatter (between the first two --- delimiters) and output instructions.
+awk '/^---/{if(++count==2){found=1;next}} found' "$SKILL"
 `;
 }
 

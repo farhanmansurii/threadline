@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { getThreadlinePaths } from './paths.mjs';
+import { getAdapter } from '../adapters/index.mjs';
 
 export function createSetupPlan({ mode, runtimes, dryRun }) {
   const paths = getThreadlinePaths();
@@ -9,7 +10,7 @@ export function createSetupPlan({ mode, runtimes, dryRun }) {
       mode,
       dryRun,
       actions: [
-        write(path.join(paths.dataDir, 'adoption-report.json'), 'Inspect current Claude/Codex setup and write adoption report'),
+        write(path.join(paths.dataDir, 'adoption-report.json'), 'Inspect current runtime setups and write adoption report'),
       ],
       notes: ['Adopt is report-only in alpha and does not mutate runtime config.'],
     };
@@ -22,21 +23,21 @@ export function createSetupPlan({ mode, runtimes, dryRun }) {
     write(paths.dataDir, 'Create Threadline state directory'),
   ];
 
-  if (runtimes.includes('claude')) {
-    actions.push(
-      write('~/.claude/skills/threadline', 'Install Claude skill entrypoint'),
-      write('~/.claude/commands/handoff.md', 'Install Claude handoff command'),
-      write('~/.claude/commands/resume.md', 'Install Claude resume command'),
-      write('~/.claude/commands/context.md', 'Install Claude context command'),
-      write('~/.claude/commands/learnings.md', 'Install Claude learnings command')
-    );
-  }
-
-  if (runtimes.includes('codex')) {
-    actions.push(
-      write('~/.codex/skills/threadline', 'Install Codex skill entrypoint'),
-      merge('~/.codex/config.toml', 'Merge Threadline-managed MCP/runtime config')
-    );
+  for (const runtime of runtimes) {
+    const adapter = getAdapter(runtime);
+    actions.push(write(adapter.homeDir, `Create ${adapter.name} runtime directory`));
+    if (adapter.supports.skills) {
+      actions.push(write(path.join(adapter.homeDir, 'skills', 'threadline'), `Install ${adapter.name} skill entrypoint`));
+    }
+    if (adapter.supports.commands) {
+      actions.push(write(path.join(adapter.homeDir, 'commands', 'handoff.md'), `Install ${adapter.name} handoff command`));
+      actions.push(write(path.join(adapter.homeDir, 'commands', 'resume.md'), `Install ${adapter.name} resume command`));
+      actions.push(write(path.join(adapter.homeDir, 'commands', 'context.md'), `Install ${adapter.name} context command`));
+      actions.push(write(path.join(adapter.homeDir, 'commands', 'learnings.md'), `Install ${adapter.name} learnings command`));
+    }
+    if (adapter.supports.config) {
+      actions.push(merge(path.join(adapter.homeDir, 'config.toml'), `Merge Threadline-managed config for ${adapter.name}`));
+    }
   }
 
   return {
@@ -47,7 +48,7 @@ export function createSetupPlan({ mode, runtimes, dryRun }) {
     notes: [
       'Merge preserves existing user config and only owns marked Threadline sections.',
       'Replace requires backups and explicit approval.',
-      'Replace reinstalls all registered skill packs for the selected runtimes and clears managed Claude command files first.',
+      'Replace reinstalls all registered skill packs for the selected runtimes and clears managed command files first.',
     ],
   };
 }

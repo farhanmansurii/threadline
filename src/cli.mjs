@@ -11,6 +11,7 @@ import {
 import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
+import { listAdapters, normalizeRuntimes } from './adapters/index.mjs';
 
 // ── tiny helpers ──────────────────────────────────────────────────────────────
 
@@ -60,20 +61,24 @@ function guardCancel(value, msg = 'Operation cancelled.') {
 async function runSetup(flags) {
   p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('setup')}`);
 
+  const known = listAdapters();
+  const defaultRuntimes = ['claude', 'codex'];
+
   // ── runtimes ──
-  const runtimes = flags.runtimes
-    ? parseList(flags.runtimes)
-    : guardCancel(
-        await p.multiselect({
-          message: 'Which runtimes do you want to set up?',
-          options: [
-            { value: 'claude', label: 'Claude Code', hint: '~/.claude/' },
-            { value: 'codex', label: 'Codex', hint: '~/.codex/' },
-          ],
-          initialValues: ['claude', 'codex'],
-          required: true,
-        }),
-      );
+  let runtimes;
+  if (flags.runtimes) {
+    runtimes = parseList(flags.runtimes);
+  } else {
+    const options = known.map((a) => ({ value: a.id, label: a.name, hint: a.homeDir }));
+    runtimes = guardCancel(
+      await p.multiselect({
+        message: 'Which runtimes do you want to set up?',
+        options,
+        initialValues: defaultRuntimes,
+        required: true,
+      }),
+    );
+  }
 
   // ── mode ──
   let mode;
@@ -133,20 +138,24 @@ async function runSetup(flags) {
 async function runSkillsInstall(flags, rest) {
   p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('skills install')}`);
 
+  const known = listAdapters();
+  const defaultRuntimes = ['claude'];
+
   // ── runtimes ──
-  const runtimes = flags.runtimes
-    ? parseList(flags.runtimes)
-    : guardCancel(
-        await p.multiselect({
-          message: 'Install for which runtimes?',
-          options: [
-            { value: 'claude', label: 'Claude Code' },
-            { value: 'codex', label: 'Codex' },
-          ],
-          initialValues: ['claude'],
-          required: true,
-        }),
-      );
+  let runtimes;
+  if (flags.runtimes) {
+    runtimes = parseList(flags.runtimes);
+  } else {
+    const options = known.map((a) => ({ value: a.id, label: a.name }));
+    runtimes = guardCancel(
+      await p.multiselect({
+        message: 'Install for which runtimes?',
+        options,
+        initialValues: defaultRuntimes,
+        required: true,
+      }),
+    );
+  }
 
   // ── all vs pick ──
   let all = Boolean(flags.all);
@@ -471,11 +480,11 @@ function printHelp() {
 ${chalk.bold('Threadline')} ${chalk.dim('— portable agent runtime manager')}
 
 ${chalk.bold('Usage')}
-  ${chalk.cyan('threadline setup')}     ${chalk.dim('[--merge|--adopt|--replace] [--runtimes claude,codex] [--yes] [--dry-run]')}
+  ${chalk.cyan('threadline setup')}     ${chalk.dim('[--merge|--adopt|--replace] [--runtimes claude,codex,cursor,kimi,opencode,...] [--yes] [--dry-run]')}
   ${chalk.cyan('threadline init')}      ${chalk.dim('[--path <dir>] [--local|--repo] [--dry-run]')}
   ${chalk.cyan('threadline detect')}    ${chalk.dim('[--path <dir>] [--json]')}
   ${chalk.cyan('threadline skills')}    ${chalk.dim('list')}
-  ${chalk.cyan('threadline skills')}    ${chalk.dim('install  [--all] [--replace] [--runtimes claude,codex] [pack-id ...]')}
+  ${chalk.cyan('threadline skills')}    ${chalk.dim('install  [--all] [--replace] [--runtimes claude,codex,cursor,kimi,opencode,...] [pack-id ...]')}
   ${chalk.cyan('threadline skills')}    ${chalk.dim('recommend  [--path <dir>]')}
   ${chalk.cyan('threadline index')}     ${chalk.dim('[--path <dir>] [--dry-run]')}
   ${chalk.cyan('threadline handoff')}   ${chalk.dim('create  [--title <t>] [--summary <s>] [--vault <path>]')}

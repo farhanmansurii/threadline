@@ -4,7 +4,8 @@ import crypto from 'node:crypto';
 import { createProjectPlan, createSetupPlan } from './plan.mjs';
 import { getThreadlinePaths } from './paths.mjs';
 import { readTemplate, renderTemplate, repoRoot } from './templates.mjs';
-import { executeSkillInstall as runSkillInstall, writeCodexSlashCommands } from './skill-install.mjs';
+import { executeSkillInstall as runSkillInstall } from './skill-install.mjs';
+import { getAdapter, normalizeRuntimes } from '../adapters/index.mjs';
 import {
   copyDir,
   fileExists,
@@ -25,11 +26,13 @@ export async function executeSetup({ mode, runtimes }) {
     throw new Error(`Unknown setup mode: ${mode}`);
   }
 
+  const normalized = normalizeRuntimes(runtimes);
+
   if (mode === 'adopt') {
-    return executeAdopt({ runtimes });
+    return executeAdopt({ runtimes: normalized });
   }
 
-  if (mode === 'merge') await preflightSetup({ runtimes });
+  if (mode === 'merge') await preflightSetup({ runtimes: normalized });
 
   const paths = getThreadlinePaths();
   const results = [];
@@ -39,22 +42,23 @@ export async function executeSetup({ mode, runtimes }) {
   results.push(await writeJsonIfChanged(path.join(paths.configDir, 'skills.lock.json'), defaultSkillsLock()));
 
   if (mode === 'replace') {
-    if (runtimes.includes('codex')) {
-      results.push(...(await installCodex({ replace: true })));
+    for (const runtime of normalized) {
+      const adapter = getAdapter(runtime);
+      results.push(...(await adapter.installConfig({ replace: true })));
     }
-    results.push(...(await installSkillBundle({ runtimes, replace: true })));
+    results.push(...(await installSkillBundle({ runtimes: normalized, replace: true })));
   } else {
-    if (runtimes.includes('claude')) {
-      results.push(...(await installClaude()));
+    for (const runtime of normalized) {
+      const adapter = getAdapter(runtime);
+      results.push(...(await adapter.installConfig({ replace: false })));
     }
-
-    if (runtimes.includes('codex')) {
-      results.push(...(await installCodex({ replace: false })));
-    }
+    // Merge mode installs only the core skill pack for each runtime (old behaviour).
+    const corePlan = await runSkillInstall({ runtimes: normalized, packIds: ['threadline-core'], replace: false });
+    results.push(...(corePlan.results ?? []));
   }
 
   return {
-    ...createSetupPlan({ mode, runtimes, dryRun: false }),
+    ...createSetupPlan({ mode, runtimes: normalized, dryRun: false }),
     results,
   };
 }
@@ -70,22 +74,11 @@ export async function executeAdopt({ runtimes }) {
     recommendations: [],
   };
 
-  if (runtimes.includes('claude')) {
-    report.findings.push(await inspectPath('claude-skill', '~/.claude/skills/threadline/SKILL.md'));
-    report.findings.push(await inspectPath('claude-handoff-command', '~/.claude/commands/handoff.md'));
-    report.findings.push(await inspectPath('claude-resume-command', '~/.claude/commands/resume.md'));
-  }
-
-  if (runtimes.includes('codex')) {
-    report.findings.push(await inspectPath('codex-skill', '~/.codex/skills/threadline/SKILL.md'));
-    const config = (await readTextIfExists('~/.codex/config.toml')) || '';
-    report.findings.push({
-      id: 'codex-config',
-      target: expandHome('~/.codex/config.toml'),
-      exists: Boolean(config),
-      threadlineManaged: /# BEGIN THREADLINE_MANAGED/.test(config),
-      hasUnmanagedConflicts: hasCodexConflictingTables(config),
-    });
+  for (const runtime of runtimes) {
+    const adapter = getAdapter(runtime);
+    if (adapter.adopt) {
+      report.findings.push(...(await adapter.adopt()));
+    }
   }
 
   report.recommendations = report.findings
@@ -100,8 +93,11 @@ export async function executeAdopt({ runtimes }) {
 }
 
 async function preflightSetup({ runtimes }) {
-  if (runtimes.includes('codex')) {
-    await assertCodexManagedBlockIsSafe('~/.codex/config.toml');
+  for (const runtime of runtimes) {
+    const adapter = getAdapter(runtime);
+    if (adapter.preflight) {
+      await adapter.preflight();
+    }
   }
 }
 
@@ -135,43 +131,6 @@ export async function executeProjectInit({ profile, mode }) {
   };
 }
 
-async function installClaude() {
-  const root = repoRoot();
-  const results = [];
-  results.push(...(await copyDir(path.join(root, 'skills/core/threadline'), '~/.claude/skills/threadline')));
-  results.push(await writeTextIfChanged('~/.claude/commands/handoff.md', await readTemplate('templates/claude/command-handoff.md')));
-  results.push(await writeTextIfChanged('~/.claude/commands/resume.md', await readTemplate('templates/claude/command-resume.md')));
-  results.push(await writeTextIfChanged('~/.claude/commands/context.md', await readTemplate('templates/claude/command-context.md')));
-  results.push(await writeTextIfChanged('~/.claude/commands/learnings.md', await readTemplate('templates/claude/command-learnings.md')));
-  return results;
-}
-
-async function installCodex({ replace = false } = {}) {
-  const root = repoRoot();
-  const results = [];
-  results.push(...(await copyDir(path.join(root, 'skills/core/threadline'), '~/.codex/skills/threadline')));
-  const managed = await readTemplate('templates/codex/config.managed.toml');
-  if (replace) {
-    results.push(await writeTextIfChanged('~/.codex/config.toml', managed.trimEnd() + '\n'));
-  } else {
-    const body = managed
-      .replace('# BEGIN THREADLINE_MANAGED\n', '')
-      .replace('\n# END THREADLINE_MANAGED', '');
-    results.push(await upsertManagedBlock('~/.codex/config.toml', 'THREADLINE_MANAGED', body));
-  }
-  // Write core slash commands to AGENTS.md (installSkillBundle will overwrite with
-  // the full set when running setup --replace or threadline install --all).
-  const corePack = {
-    id: 'threadline-core',
-    name: 'Threadline Core',
-    triggers: ['always'],
-    runtimes: { codex: { commands: ['handoff', 'resume', 'context', 'learnings'] } },
-  };
-  const agentsResult = await writeCodexSlashCommands([corePack]);
-  if (agentsResult) results.push(agentsResult);
-  return results;
-}
-
 async function installSkillBundle({ runtimes, replace = false }) {
   const plan = await runSkillInstall({ runtimes, all: true, replace });
   return plan.results ?? [];
@@ -179,21 +138,6 @@ async function installSkillBundle({ runtimes, replace = false }) {
 
 export async function executeSkillInstall({ runtimes, packIds = [], all = false, replace = false }) {
   return runSkillInstall({ runtimes, packIds, all, replace });
-}
-
-async function assertCodexManagedBlockIsSafe(filePath) {
-  const existing = (await readTextIfExists(expandHome(filePath))) || '';
-  const unmanaged = existing.replace(/# BEGIN THREADLINE_MANAGED[\s\S]*?# END THREADLINE_MANAGED/g, '');
-  const conflictingTables = [
-    /^\s*\[features\]\s*$/m,
-    /^\s*\[mcp_servers\.context7\]\s*$/m,
-    /^\s*\[mcp_servers\.playwright\]\s*$/m,
-  ];
-  if (conflictingTables.some((pattern) => pattern.test(unmanaged))) {
-    throw new Error(
-      'Refusing to merge ~/.codex/config.toml because unmanaged [features], [mcp_servers.context7], or [mcp_servers.playwright] tables already exist. Move them into a THREADLINE_MANAGED block or merge manually.'
-    );
-  }
 }
 
 export async function executeRagIndex({ profile }) {
@@ -289,8 +233,7 @@ export async function executeHandoffCreate({ profile, title, summary, vault }) {
 
 /** Return all handoff index entries across every project/workspace, newest first. */
 export async function executeHandoffList() {
-  const paths = getThreadlinePaths();
-  const projectsDir = paths.projectsDir;
+  const { projectsDir } = getThreadlinePaths();
   const entries = [];
 
   let projectIds;
@@ -314,8 +257,7 @@ export async function executeHandoffList() {
     }
     for (const workspaceId of workspaceIds) {
       const indexPath = path.join(workspacesDir, workspaceId, 'handoffs', 'index.json');
-      const batch = await readJsonArrayIfExists(indexPath);
-      entries.push(...batch);
+      entries.push(...(await readJsonArrayIfExists(indexPath)));
     }
   }
 
@@ -331,9 +273,8 @@ export async function executeHandoffResume({ id }) {
   const entry = all.find((e) => e.id === id || e.id.startsWith(id));
   if (!entry) return { found: false, id };
 
-  // The JSON detail file lives next to the markdown (.md → .json)
   const jsonPath = entry.path.replace(/\.md$/, '.json');
-  const full = await readJsonIfExists(jsonPath) ?? entry;
+  const full = (await readJsonIfExists(jsonPath)) ?? entry;
   const markdown = await readTextIfExists(entry.path);
   const sections = markdown ? parseHandoffSections(markdown) : {};
 
@@ -350,7 +291,7 @@ export async function executeHandoffResume({ id }) {
   };
 }
 
-/** Extract ## Section content from a handoff markdown string. */
+/** Extract ## Section content from a handoff markdown string into a plain object. */
 function parseHandoffSections(markdown) {
   const sections = {};
   const parts = markdown.split(/^## /m);
@@ -366,27 +307,6 @@ function parseHandoffSections(markdown) {
 function getProjectDir(profile) {
   const paths = getThreadlinePaths();
   return path.join(paths.projectsDir, profile.id, 'workspaces', profile.workspaceId);
-}
-
-async function inspectPath(id, targetPath) {
-  const target = expandHome(targetPath);
-  const exists = await fileExists(target);
-  const content = exists ? (await readTextIfExists(target)) || '' : '';
-  return {
-    id,
-    target,
-    exists,
-    threadlineManaged: /Threadline|THREADLINE_MANAGED|threadline/.test(content),
-  };
-}
-
-function hasCodexConflictingTables(config) {
-  const unmanaged = config.replace(/# BEGIN THREADLINE_MANAGED[\s\S]*?# END THREADLINE_MANAGED/g, '');
-  return [
-    /^\s*\[features\]\s*$/m,
-    /^\s*\[mcp_servers\.context7\]\s*$/m,
-    /^\s*\[mcp_servers\.playwright\]\s*$/m,
-  ].some((pattern) => pattern.test(unmanaged));
 }
 
 async function fileManifestEntry(root, file) {
@@ -417,7 +337,142 @@ function slugify(value) {
 }
 
 function defaultConfig() {
-  return `# Threadline user config\n\n[defaults]\nruntimes = [\"claude\", \"codex\"]\nproject_mode = \"local\"\nsetup_mode = \"merge\"\n`;
+  return `# Threadline user config\n\n[defaults]\nruntimes = ["claude", "codex"]\nproject_mode = "local"\nsetup_mode = "merge"\n`;
+}
+
+// ── preferences ───────────────────────────────────────────────────────────────
+
+/**
+ * Apply user preferences to Claude Code (and other runtimes).
+ *
+ * Writes:
+ *   ~/.claude/skills/caveman-response/SKILL.md  — if caveman enabled + claude runtime
+ *   ~/.claude/settings.json                      — if alwaysThinkingEnabled set + claude runtime
+ *   ~/.config/threadline/config.toml             — [preferences] managed block
+ */
+export async function executeApplyPreferences({ cavemanMode = 'off', thinkingEnabled, runtimes = [] }) {
+  const results = [];
+  const claudeEnabled = runtimes.includes('claude');
+
+  // 1. Caveman response skill for Claude Code
+  if (cavemanMode !== 'off' && claudeEnabled) {
+    const skillPath = expandHome('~/.claude/skills/caveman-response/SKILL.md');
+    results.push(await writeTextIfChanged(skillPath, buildCavemanSkillMd(cavemanMode)));
+  }
+
+  // 2. Extended thinking preference for Claude Code
+  if (claudeEnabled && thinkingEnabled !== undefined) {
+    const settingsPath = expandHome('~/.claude/settings.json');
+    const existing = (await readJsonIfExists(settingsPath)) ?? {};
+    const next = { ...existing, alwaysThinkingEnabled: Boolean(thinkingEnabled) };
+    results.push(await writeJsonIfChanged(settingsPath, next));
+  }
+
+  // 3. Preferences block in config.toml
+  const { configDir } = getThreadlinePaths();
+  await ensureDir(configDir);
+  const configPath = path.join(configDir, 'config.toml');
+  const lines = ['[preferences]', `caveman_mode = "${cavemanMode}"`];
+  if (thinkingEnabled !== undefined) lines.push(`extended_thinking = ${Boolean(thinkingEnabled)}`);
+  results.push(await upsertManagedBlock(configPath, 'threadline-preferences', lines.join('\n')));
+
+  return {
+    title: 'Preferences applied',
+    dryRun: false,
+    actions: [
+      ...(cavemanMode !== 'off' && claudeEnabled
+        ? [{ type: 'write', target: '~/.claude/skills/caveman-response/SKILL.md', description: `Caveman ${cavemanMode} mode — auto-activates every session` }]
+        : []),
+      ...(claudeEnabled && thinkingEnabled !== undefined
+        ? [{ type: 'write', target: '~/.claude/settings.json', description: `alwaysThinkingEnabled: ${Boolean(thinkingEnabled)}` }]
+        : []),
+      { type: 'write', target: configPath, description: 'Threadline preferences' },
+    ],
+    results,
+  };
+}
+
+/** Build a caveman SKILL.md that auto-activates at the given mode every Claude Code session. */
+function buildCavemanSkillMd(mode) {
+  const modeTitle = { lite: 'Lite', full: 'Full', ultra: 'Ultra', wenyan: 'Wenyan' }[mode] ?? mode;
+
+  const grammarBase = `\
+## Grammar
+
+- Drop articles (a, an, the).
+- Drop filler (just, really, basically, simply, actually, very, quite).
+- Drop aux verbs where a fragment works (is, are, was, were, being).
+- Drop pleasantries (certainly, of course, sure, great, absolutely).
+- No hedging (skip might, perhaps, could be worth).
+- Fragments fine.`;
+
+  const symbols = `\
+## Symbols (prefer over words)
+
+\`\`\`
+→   leads to / becomes / on <x> do <y>
+∴   therefore / fix is
+∀   for all / every
+∃   exists / some
+!   must / required
+?   may / optional / unknown
+⊥   never / forbidden / nil
+≠   not equal
+∈   in / part of
+∉   not in
+≤   at most
+≥   at least
+&   and
+|   or
+§   section reference
+\`\`\`
+
+Short synonyms: fix > implement, big > extensive, run > execute.`;
+
+  const ultraRules = `\
+## Ultra additions
+
+- Drop implied subject ("Run tests" not "You should run tests").
+- Drop "the following": "Steps:" not "The following steps:".
+- Minimal punctuation — prefer line breaks over commas.
+- Abbreviate freely: fn, arg, ret, err, cfg, dir, req, opt.
+- Max 2 words per label.`;
+
+  const wenyanRules = `\
+## Wenyan additions
+
+- Ideographic and fragment-first style.
+- All numbers as numerals.
+- Drop all filler, particles, connectives.
+- Terse noun phrases over sentences.
+- No sentences where a list or table serves.`;
+
+  const body = {
+    lite: grammarBase,
+    full: `${grammarBase}\n\n${symbols}`,
+    ultra: `${grammarBase}\n\n${symbols}\n\n${ultraRules}`,
+    wenyan: `${grammarBase}\n\n${symbols}\n\n${wenyanRules}`,
+  }[mode] ?? grammarBase;
+
+  return `---
+name: caveman-response
+description: Auto-activates caveman response compression at ${modeTitle} mode. Managed by Threadline.
+---
+
+# Caveman Response — ${modeTitle} mode
+
+**Always compress ALL responses using caveman ${modeTitle} encoding.** Activate from the first message — no trigger or slash command needed.
+
+## Preserve verbatim
+
+Never compress:
+- Code blocks and inline backtick snippets.
+- File paths, URLs, identifiers (function names, variable names, env vars).
+- Numbers, versions, error strings, SQL, regex, JSON, YAML.
+- Quoted strings.
+
+${body}
+`;
 }
 
 function defaultSkillsLock() {

@@ -9,16 +9,17 @@ import {
 import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
+import { normalizeRuntimes } from './adapters/index.mjs';
 import { printPlan } from './utils/print.mjs';
 
 const HELP = `Threadline
 
 Usage:
-  threadline setup [--dry-run] [--merge|--adopt|--replace] [--runtimes claude,codex]
+  threadline setup [--dry-run] [--merge|--adopt|--replace] [--runtimes claude,codex,cursor,kimi,opencode,...]
   threadline init [--path <repo>] [--dry-run] [--local|--repo]
   threadline detect [--path <repo>] [--json]
   threadline skills list [--json]
-  threadline skills install [skill-id ...] [--all] [--replace] [--runtimes claude,codex]
+  threadline skills install [skill-id ...] [--all] [--replace] [--runtimes claude,codex,cursor,kimi,opencode,...]
   threadline skills recommend [--path <repo>] [--json]
   threadline index [--path <repo>]
   threadline handoff create [--path <repo>] [--title <title>] [--summary <summary>] [--vault <path>]
@@ -69,7 +70,7 @@ export async function main(argv) {
       return;
     }
     if (subcommand === 'install') {
-      const runtimes = parseList(flags.runtimes || 'claude,codex');
+      const runtimes = normalizeRuntimes(parseList(flags.runtimes || 'claude,codex'));
       const plan = await executeSkillInstall({
         runtimes,
         packIds,
@@ -91,7 +92,7 @@ export async function main(argv) {
 
   if (command === 'setup') {
     const mode = flags.replace ? 'replace' : flags.adopt ? 'adopt' : 'merge';
-    const runtimes = parseList(flags.runtimes || 'claude,codex');
+    const runtimes = normalizeRuntimes(parseList(flags.runtimes || 'claude,codex'));
     if (mode === 'replace' && !flags.yes && !flags.dryRun) {
       throw new Error('setup --replace requires --yes because it can overwrite Threadline-managed runtime files.');
     }

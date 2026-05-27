@@ -5,6 +5,8 @@ import { readTemplate } from '../../core/templates.mjs';
 export const id = 'codex';
 export const name = 'Codex';
 export const homeDir = '~/.codex';
+// Codex has no native slash command files. Commands are written as a routing
+// table in AGENTS.md via finalizeInstall after all packs are processed.
 export const supports = { skills: true, commands: false, config: true };
 
 export async function installSkills(sourceDir, { replace = false } = {}) {
@@ -14,7 +16,49 @@ export async function installSkills(sourceDir, { replace = false } = {}) {
 }
 
 export async function installCommands() {
+  // Codex does not support per-file command installation.
+  // Slash commands are written in bulk by finalizeInstall via AGENTS.md.
   return [];
+}
+
+/**
+ * Called once after all packs are installed. Writes a slash command routing
+ * table to ~/.codex/AGENTS.md so users can type /command to invoke any skill.
+ *
+ * @param {Array} packs - The full list of pack objects installed for this runtime.
+ */
+export async function finalizeInstall(packs) {
+  const rows = [];
+  for (const pack of packs) {
+    const commands = pack.runtimes?.codex?.commands?.length ? pack.runtimes.codex.commands : [pack.id];
+    for (const command of commands) {
+      rows.push({ command, name: pack.name, triggers: (pack.triggers ?? []).slice(0, 3).join(', ') });
+    }
+  }
+  if (!rows.length) return null;
+
+  const maxCmd = Math.max(...rows.map((r) => r.command.length + 1)); // +1 for leading /
+  const maxName = Math.max(...rows.map((r) => r.name.length));
+  const header = `| ${'Command'.padEnd(maxCmd)} | ${'Skill'.padEnd(maxName)} | Triggers |`;
+  const sep = `| ${'-'.repeat(maxCmd)} | ${'-'.repeat(maxName)} | -------- |`;
+  const tableRows = rows.map(
+    (r) =>
+      `| \`/${r.command}\`${' '.repeat(maxCmd - r.command.length - 1)} | ${r.name.padEnd(maxName)} | ${r.triggers || '—'} |`,
+  );
+
+  const block = [
+    '## Threadline Slash Commands',
+    '',
+    'Type `/command` to activate a Threadline skill. All commands below are installed and ready to use.',
+    '',
+    header,
+    sep,
+    ...tableRows,
+    '',
+    '> Commands are defined by Threadline. Re-run `threadline install` to refresh this list.',
+  ].join('\n');
+
+  return upsertManagedBlock(path.join(homeDir, 'AGENTS.md'), 'THREADLINE_SLASH_COMMANDS', block);
 }
 
 export async function installConfig({ replace = false } = {}) {

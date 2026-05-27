@@ -17,10 +17,10 @@
 
 **One config. Every AI tool. Zero repo clutter.**
 
-[![npm version](https://img.shields.io/npm/v/threadline?style=flat-square&color=0EA5E9)](https://www.npmjs.com/package/threadline)
-[![license](https://img.shields.io/npm/l/threadline?style=flat-square&color=8B5CF6)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/threadline-cli?style=flat-square&color=0EA5E9)](https://www.npmjs.com/package/threadline-cli)
+[![license](https://img.shields.io/npm/l/threadline-cli?style=flat-square&color=8B5CF6)](LICENSE)
 [![Node.js](https://img.shields.io/node/v/threadline?style=flat-square&color=10B981)](https://nodejs.org/)
-[![downloads](https://img.shields.io/npm/dm/threadline?style=flat-square&color=F59E0B)](https://www.npmjs.com/package/threadline)
+[![downloads](https://img.shields.io/npm/dm/threadline-cli?style=flat-square&color=F59E0B)](https://www.npmjs.com/package/threadline-cli)
 
 **Claude · Codex · Cursor · Kimi · OpenCode · ANY CLI**
 
@@ -95,10 +95,10 @@ Requires Node.js 20 or later.
 
 ```bash
 # Run without installing
-npx threadline setup
+npx threadline-cli setup
 
-# Or install globally
-npm install -g threadline
+# Or install globally (binary stays `threadline`)
+npm install -g threadline-cli
 threadline setup
 ```
 

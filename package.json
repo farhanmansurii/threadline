@@ -1,11 +1,23 @@
 {
   "name": "threadline",
   "version": "0.1.0",
-  "description": "Portable agent environment manager for Claude Code, Codex, Cursor, OpenCode, Kimi, RAG, Obsidian handoffs, and project-aware workflows.",
+  "description": "Portable agent runtime manager for Claude Code, Codex, Cursor, OpenCode, Kimi, and any CLI. Multi-runtime skills, project detection, RAG indexing, and Obsidian handoffs.",
   "type": "module",
   "bin": {
     "threadline": "./bin/threadline"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "docs/",
+    "schemas/",
+    "presets/",
+    "registry/",
+    "templates/",
+    "skills/",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "check": "node --check bin/threadline && node --check src/cli.mjs && node --check src/core/detect-project.mjs && node --check src/core/execute.mjs && node --check src/core/paths.mjs && node --check src/core/plan.mjs && node --check src/core/skill-install.mjs && node --check src/core/skills.mjs && node --check src/core/templates.mjs",
     "smoke": "node bin/threadline detect --path examples/fullstack-js --json && node bin/threadline skills list && node bin/threadline skills recommend --path examples/fullstack-js && node bin/threadline setup --dry-run --runtimes claude,codex && node bin/threadline setup --adopt --dry-run --runtimes claude,codex && node bin/threadline setup --replace --dry-run --runtimes codex && node bin/threadline init --path examples/fullstack-js --dry-run && node bin/threadline index --path examples/fullstack-js --dry-run",
@@ -13,17 +25,52 @@
   },
   "keywords": [
     "claude-code",
+    "claude",
     "codex",
+    "openai-codex",
     "cursor",
-    "opencode",
+    "cursor-ide",
     "kimi",
-    "rag",
-    "obsidian",
-    "mcp",
+    "opencode",
     "ai-agents",
-    "developer-tools"
+    "agent-runtime",
+    "developer-tools",
+    "devtools",
+    "cli",
+    "command-line",
+    "terminal",
+    "productivity",
+    "ai-workflow",
+    "mcp",
+    "model-context-protocol",
+    "skills",
+    "rag",
+    "retrieval-augmented-generation",
+    "obsidian",
+    "markdown",
+    "handoff",
+    "project-detection",
+    "stack-detection",
+    "config-management",
+    "xdg",
+    "portable",
+    "cross-runtime",
+    "multi-agent",
+    "code-assistant",
+    "coding-agent",
+    "llm-tools",
+    "llm-cli"
   ],
+  "author": "Farhan Mansuri <mansurifarhanfm@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/farhanmansurii/threadline.git"
+  },
+  "bugs": {
+    "url": "https://github.com/farhanmansurii/threadline/issues"
+  },
+  "homepage": "https://github.com/farhanmansurii/threadline#readme",
   "engines": {
     "node": ">=20"
   },

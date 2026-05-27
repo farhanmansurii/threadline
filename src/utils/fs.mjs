@@ -14,8 +14,9 @@ export async function fileExists(filePath) {
 export async function readJsonIfExists(filePath) {
   try {
     return JSON.parse(await fs.readFile(filePath, 'utf8'));
-  } catch {
-    return null;
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
   }
 }
 
@@ -42,8 +43,9 @@ export async function ensureDir(dirPath) {
 export async function readTextIfExists(filePath) {
   try {
     return await fs.readFile(expandHome(filePath), 'utf8');
-  } catch {
-    return null;
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
   }
 }
 
@@ -70,6 +72,17 @@ export async function writeTextIfMissing(filePath, content) {
 
 export async function writeJsonIfChanged(filePath, value) {
   return writeTextIfChanged(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+export async function readJsonArrayIfExists(filePath) {
+  const existing = await readTextIfExists(filePath);
+  if (!existing) return [];
+  try {
+    const parsed = JSON.parse(existing);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function copyDir(sourceDir, targetDir) {
@@ -102,6 +115,64 @@ export async function upsertManagedBlock(filePath, blockName, blockContent) {
     ? existing.replace(pattern, nextBlock)
     : `${existing.trimEnd()}${existing.trim() ? '\n\n' : ''}${nextBlock}\n`;
   return writeTextIfChanged(target, next);
+}
+
+export async function listFilesRecursive(rootDir, { include = [], exclude = [] } = {}) {
+  const root = expandHome(rootDir);
+  const realRoot = await fs.realpath(root);
+  const out = [];
+  async function walk(current) {
+    let entries;
+    try {
+      entries = await fs.readdir(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      const relative = path.relative(root, full);
+      if (matchesAny(relative, exclude) || isSecretPath(relative)) continue;
+      const stat = await fs.lstat(full);
+      if (stat.isSymbolicLink()) continue;
+      const real = await fs.realpath(full).catch(() => null);
+      if (!real || !isInside(realRoot, real)) continue;
+      if (entry.isDirectory()) {
+        await walk(full);
+        continue;
+      }
+      if (stat.size > 1024 * 1024) continue;
+      if (!include.length || matchesAny(relative, include)) out.push(full);
+    }
+  }
+  await walk(root);
+  return out.sort();
+}
+
+function matchesAny(relativePath, patterns) {
+  return patterns.some((pattern) => matchesGlob(relativePath, pattern));
+}
+
+function matchesGlob(relativePath, pattern) {
+  const normalized = relativePath.split(path.sep).join('/');
+  const escaped = pattern
+    .split('/')
+    .map((part) => {
+      if (part === '**') return '.*';
+      return part.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*');
+    })
+    .join('/');
+  return new RegExp(`^${escaped}$`).test(normalized);
+}
+
+function isSecretPath(relativePath) {
+  return relativePath
+    .split(path.sep)
+    .some((part) => part === '.env' || part.startsWith('.env.') || part.endsWith('.pem') || part.endsWith('.key'));
+}
+
+function isInside(root, target) {
+  const relative = path.relative(root, target);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
 function escapeRegExp(value) {

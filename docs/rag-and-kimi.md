@@ -4,7 +4,7 @@ Threadline separates human-readable knowledge from generated retrieval indexes.
 
 ## LightRAG
 
-Use LightRAG or another configured RAG backend for project retrieval. Store generated indexes under:
+Threadline alpha currently writes a manifest-based RAG index. LightRAG or another embedding backend can consume this manifest later. Store generated indexes under:
 
 ```text
 ~/.local/share/threadline/projects/<project-id>/workspaces/<workspace-id>/rag/

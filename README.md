@@ -17,6 +17,8 @@ Threadline is the layer between your machine, your repos, and your AI coding too
 ```bash
 npx threadline setup --dry-run
 npx threadline setup --merge --runtimes claude,codex
+npx threadline setup --adopt --runtimes claude,codex
+npx threadline setup --replace --yes --runtimes codex
 ```
 
 Inside a project:
@@ -24,6 +26,8 @@ Inside a project:
 ```bash
 npx threadline init --dry-run
 npx threadline init --local
+npx threadline index
+npx threadline handoff create --title "Feature name"
 ```
 
 `--local` writes project profile state outside the repo:
@@ -60,8 +64,8 @@ Threadline never needs to hard overwrite your setup to become useful.
 
 ```text
 setup --merge    # default, additive managed sections
-setup --adopt    # planned
-setup --replace  # planned
+setup --adopt    # writes an adoption report
+setup --replace  # requires --yes, replaces Threadline-managed/core runtime files
 ```
 
 Project setup is local by default:
@@ -73,4 +77,4 @@ init --repo      # planned explicit repo files
 
 ## Status
 
-This repo is in early alpha. The current CLI supports project detection, skill listing/recommendation, setup dry-runs, local project profile writes, and basic Claude/Codex setup writes. Setup writes are atomic, idempotent, reject relative XDG state paths, and fail closed on conflicting unmanaged Codex TOML tables. Obsidian handoff writers, LightRAG indexing, external skill fetching, `setup --adopt`, `setup --replace`, `init --repo`, and advanced runtime adapters are intentionally staged behind explicit follow-up work.
+This repo is in early alpha. The current CLI supports project detection, skill listing/recommendation, setup dry-runs, local project profile writes, basic Claude/Codex setup writes, adoption reports, guarded replace mode, Obsidian Markdown handoffs, and manifest-based RAG indexing. Setup writes are atomic, idempotent, reject relative XDG state paths, and fail closed on conflicting unmanaged Codex TOML tables. LightRAG embeddings, external skill fetching, `init --repo`, and advanced runtime adapters are intentionally staged behind explicit follow-up work.

@@ -7,6 +7,8 @@ Installs or syncs user-level runtime setup.
 ```bash
 threadline setup --dry-run
 threadline setup --merge --runtimes claude,codex
+threadline setup --adopt --runtimes claude,codex
+threadline setup --replace --yes --runtimes codex
 ```
 
 Modes:
@@ -14,8 +16,8 @@ Modes:
 | Mode | Behavior |
 | --- | --- |
 | `merge` | Add missing managed sections and preserve existing config |
-| `adopt` | Planned |
-| `replace` | Planned |
+| `adopt` | Inspect current setup and write an adoption report |
+| `replace` | Replace Threadline-managed/core runtime files; requires `--yes` |
 
 ## `threadline init`
 
@@ -57,9 +59,27 @@ threadline skills recommend --path /path/to/repo
 ## Planned Commands
 
 ```bash
-threadline handoff create
 threadline resume <handoff-id>
 threadline context <query>
-threadline index
 threadline learnings
+```
+
+## `threadline index`
+
+Writes a manifest-based RAG index under the local project profile.
+
+```bash
+threadline index
+threadline index --path /path/to/repo
+```
+
+This is not yet an embedding/vector index.
+
+## `threadline handoff create`
+
+Writes a Markdown handoff into an Obsidian-compatible vault path and updates the local handoff index.
+
+```bash
+threadline handoff create --title "Feature name" --summary "Current state"
+threadline handoff create --vault ~/Documents/Obsidian
 ```

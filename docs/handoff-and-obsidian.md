@@ -25,6 +25,8 @@ Claude Code can expose `/handoff` through a slash command. Codex, Cursor, OpenCo
 
 ```bash
 threadline handoff create
+threadline handoff create --title "RMS Dashboard" --summary "Continue dashboard work."
+threadline handoff create --vault ~/Documents/Obsidian
 threadline resume rms-dashboard-2026-05-27-a7f3
 ```
 

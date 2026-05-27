@@ -3,6 +3,18 @@ import { getThreadlinePaths } from './paths.mjs';
 
 export function createSetupPlan({ mode, runtimes, dryRun }) {
   const paths = getThreadlinePaths();
+  if (mode === 'adopt') {
+    return {
+      title: 'User setup',
+      mode,
+      dryRun,
+      actions: [
+        write(path.join(paths.dataDir, 'adoption-report.json'), 'Inspect current Claude/Codex setup and write adoption report'),
+      ],
+      notes: ['Adopt is report-only in alpha and does not mutate runtime config.'],
+    };
+  }
+
   const actions = [
     write(paths.configDir, 'Create Threadline config directory'),
     write(path.join(paths.configDir, 'config.toml'), 'Write core config if missing'),

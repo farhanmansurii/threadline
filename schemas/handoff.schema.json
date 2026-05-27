@@ -3,10 +3,12 @@
   "$id": "https://threadline.dev/schemas/handoff.schema.json",
   "title": "Threadline Handoff",
   "type": "object",
-  "required": ["id", "projectId", "createdAt", "summary", "nextActions"],
+  "required": ["id", "projectId", "workspaceId", "createdAt", "summary", "nextActions"],
   "properties": {
     "id": { "type": "string" },
     "projectId": { "type": "string" },
+    "workspaceId": { "type": "string" },
+    "root": { "type": "string" },
     "feature": { "type": ["string", "null"] },
     "folder": { "type": ["string", "null"] },
     "createdAt": { "type": "string", "format": "date-time" },

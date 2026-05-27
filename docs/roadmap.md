@@ -20,6 +20,10 @@ Current alpha support:
 
 - `init --local` writes external project profiles.
 - `setup --merge` installs Threadline core skill/commands for Claude and core skill/managed config for Codex.
+- `setup --adopt` writes an adoption report.
+- `setup --replace --yes` replaces Threadline-managed/core runtime files.
+- `threadline index` writes a manifest-based RAG index.
+- `threadline handoff create` writes Obsidian-compatible Markdown handoffs.
 
 ## Phase 3: Knowledge Layer
 

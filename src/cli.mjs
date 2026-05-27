@@ -1,5 +1,5 @@
 import { detectProject } from './core/detect-project.mjs';
-import { executeProjectInit, executeSetup } from './core/execute.mjs';
+import { executeHandoffCreate, executeProjectInit, executeRagIndex, executeSetup } from './core/execute.mjs';
 import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
@@ -13,6 +13,8 @@ Usage:
   threadline detect [--path <repo>] [--json]
   threadline skills list [--json]
   threadline skills recommend [--path <repo>] [--json]
+  threadline index [--path <repo>]
+  threadline handoff create [--path <repo>] [--title <title>] [--summary <summary>] [--vault <path>]
   threadline paths
 
 Defaults:
@@ -63,9 +65,44 @@ export async function main(argv) {
   if (command === 'setup') {
     const mode = flags.replace ? 'replace' : flags.adopt ? 'adopt' : 'merge';
     const runtimes = parseList(flags.runtimes || 'claude,codex');
+    if (mode === 'replace' && !flags.yes && !flags.dryRun) {
+      throw new Error('setup --replace requires --yes because it can overwrite Threadline-managed runtime files.');
+    }
     const plan = flags.dryRun
       ? createSetupPlan({ mode, runtimes, dryRun: true })
       : await executeSetup({ mode, runtimes });
+    printPlan(plan);
+    return;
+  }
+
+  if (command === 'index') {
+    const profile = await detectProject(flags.path || process.cwd());
+    const plan = flags.dryRun
+      ? {
+          title: `RAG index: ${profile.name}`,
+          mode: 'manifest',
+          dryRun: true,
+          actions: [
+            { type: 'write', target: 'rag.config.json', description: 'Write RAG index policy' },
+            { type: 'write', target: 'rag/manifest.json', description: 'Write file manifest for retrieval backend' },
+          ],
+          notes: ['Dry run only.'],
+        }
+      : await executeRagIndex({ profile });
+    printPlan(plan);
+    return;
+  }
+
+  if (command === 'handoff') {
+    const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'create';
+    if (subcommand !== 'create') throw new Error(`Unknown handoff command: ${subcommand}`);
+    const profile = await detectProject(flags.path || process.cwd());
+    const plan = await executeHandoffCreate({
+      profile,
+      title: flags.title,
+      summary: flags.summary,
+      vault: flags.vault,
+    });
     printPlan(plan);
     return;
   }

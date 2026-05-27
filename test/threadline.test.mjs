@@ -73,6 +73,87 @@ test('setup refuses unmanaged conflicting Codex tables before writing', async ()
   assert.deepEqual(files, []);
 });
 
+test('setup --adopt writes an adoption report', async () => {
+  const env = await isolatedEnv();
+
+  const result = await run(['setup', '--adopt', '--runtimes', 'claude,codex'], { env });
+  assert.match(result.stdout, /adoption-report\.json/);
+
+  const report = JSON.parse(await fs.readFile(path.join(env.XDG_DATA_HOME, 'threadline', 'adoption-report.json'), 'utf8'));
+  assert.equal(report.version, 1);
+  assert.ok(report.findings.some((finding) => finding.id === 'codex-config'));
+});
+
+test('setup --replace requires --yes', async () => {
+  const env = await isolatedEnv();
+
+  await assert.rejects(run(['setup', '--replace', '--runtimes', 'codex'], { env }), /requires --yes/);
+});
+
+test('setup --replace --yes replaces Codex config', async () => {
+  const env = await isolatedEnv();
+  await fs.mkdir(path.join(env.HOME, '.codex'), { recursive: true });
+  await fs.writeFile(path.join(env.HOME, '.codex', 'config.toml'), '[features]\nold = true\n');
+
+  await run(['setup', '--replace', '--yes', '--runtimes', 'codex'], { env });
+
+  const config = await fs.readFile(path.join(env.HOME, '.codex', 'config.toml'), 'utf8');
+  assert.match(config, /BEGIN THREADLINE_MANAGED/);
+  assert.doesNotMatch(config, /old = true/);
+});
+
+test('index writes a RAG manifest', async () => {
+  const env = await isolatedEnv();
+
+  const result = await run(['index', '--path', EXAMPLE], { env });
+  assert.match(result.stdout, /manifest\.json/);
+
+  const files = await listFiles(env.XDG_DATA_HOME);
+  const manifestPath = files.find((file) => file.endsWith('rag/manifest.json'));
+  assert.ok(manifestPath);
+  const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+  assert.ok(manifest.fileCount > 0);
+  assert.ok(manifest.files.some((file) => file.path === 'package.json'));
+  assert.ok(manifest.files.every((file) => typeof file.sha256 === 'string'));
+  assert.ok(manifest.files.every((file) => typeof file.mtimeMs === 'number'));
+});
+
+test('index excludes nested secrets and symlinks', async () => {
+  const env = await isolatedEnv();
+  const repo = await fs.mkdtemp(path.join(os.tmpdir(), 'threadline-repo-'));
+  await fs.writeFile(path.join(repo, 'package.json'), '{"name":"secret-test"}\n');
+  await fs.mkdir(path.join(repo, 'src'), { recursive: true });
+  await fs.writeFile(path.join(repo, 'src', 'index.js'), 'console.log("ok")\n');
+  await fs.writeFile(path.join(repo, 'src', '.env.local'), 'TOKEN=secret\n');
+  await fs.symlink('/tmp', path.join(repo, 'src', 'tmp-link'));
+
+  await run(['index', '--path', repo], { env });
+
+  const manifestPath = (await listFiles(env.XDG_DATA_HOME)).find((file) => file.endsWith('rag/manifest.json'));
+  const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+  assert.ok(manifest.files.some((file) => file.path === 'src/index.js'));
+  assert.ok(!manifest.files.some((file) => file.path.includes('.env')));
+  assert.ok(!manifest.files.some((file) => file.path.includes('tmp-link')));
+});
+
+test('handoff create writes markdown and index', async () => {
+  const env = await isolatedEnv();
+  const vault = path.join(env.HOME, 'vault');
+
+  const result = await run(
+    ['handoff', 'create', '--path', EXAMPLE, '--title', 'RMS Dashboard', '--summary', 'Continue dashboard work.', '--vault', vault],
+    { env }
+  );
+  assert.match(result.stdout, /Resume ID:/);
+
+  const vaultFiles = await listFiles(vault);
+  assert.ok(vaultFiles.some((file) => file.endsWith('.md')));
+
+  const dataFiles = await listFiles(env.XDG_DATA_HOME);
+  assert.ok(dataFiles.some((file) => file.endsWith('handoffs/index.json')));
+  assert.ok(vaultFiles.some((file) => file.endsWith('.json')));
+});
+
 async function run(args, options = {}) {
   return execFileAsync('node', [BIN, ...args], {
     cwd: ROOT,

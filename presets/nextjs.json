@@ -1,7 +1,18 @@
 {
   "id": "nextjs",
   "name": "Next.js",
-  "skills": ["threadline-core", "nextjs", "playwright-ui"],
-  "mcp": ["context7", "memory", "playwright"],
-  "runtimes": ["claude", "codex"]
+  "skills": [
+    "threadline-core",
+    "nextjs",
+    "playwright-ui"
+  ],
+  "mcp": [
+    "context7",
+    "memory",
+    "playwright"
+  ],
+  "runtimes": [
+    "claude",
+    "codex"
+  ]
 }

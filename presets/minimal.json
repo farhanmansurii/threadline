@@ -1,7 +1,14 @@
 {
   "id": "minimal",
   "name": "Minimal",
-  "skills": ["threadline-core"],
-  "mcp": ["memory"],
-  "runtimes": ["claude", "codex"]
+  "skills": [
+    "threadline-core"
+  ],
+  "mcp": [
+    "memory"
+  ],
+  "runtimes": [
+    "claude",
+    "codex"
+  ]
 }

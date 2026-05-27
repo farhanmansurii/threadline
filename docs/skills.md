@@ -56,6 +56,6 @@ Threadline can reference upstream skill repos as optional packs.
 
 Current curated source:
 
-- `mattpocock/skills` — engineering discipline workflows such as diagnosis, TDD, architecture review, grilling, PRDs, issue slicing, handoff, Caveman, and skill authoring.
+- `mattpocock/skills` — engineering discipline workflows such as diagnosis, TDD, architecture review, grilling, PRDs, issue slicing, handoff, and skill authoring.
 
 External skills should be fetched and validated by the installer before use. They should not be silently vendored or auto-enabled.

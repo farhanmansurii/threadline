@@ -5,16 +5,27 @@
       "id": "threadline-core",
       "name": "Threadline Core",
       "bucket": "core",
-      "triggers": ["always"],
+      "triggers": [
+        "always"
+      ],
       "requires": [],
       "optional": [],
       "runtimes": {
         "claude": {
-          "skills": ["skills/core/threadline"],
-          "commands": ["handoff", "resume", "context", "learnings"]
+          "skills": [
+            "skills/core/threadline"
+          ],
+          "commands": [
+            "handoff",
+            "resume",
+            "context",
+            "learnings"
+          ]
         },
         "codex": {
-          "skills": ["skills/core/threadline"]
+          "skills": [
+            "skills/core/threadline"
+          ]
         }
       }
     },
@@ -22,16 +33,32 @@
       "id": "react-vite",
       "name": "React Vite",
       "bucket": "detected",
-      "triggers": ["vite.config.js", "vite.config.ts", "react", "jsx", "tsx"],
-      "requires": ["frontend-patterns"],
-      "optional": ["playwright-ui"],
+      "triggers": [
+        "vite.config.js",
+        "vite.config.ts",
+        "react",
+        "jsx",
+        "tsx"
+      ],
+      "requires": [
+        "frontend-patterns"
+      ],
+      "optional": [
+        "playwright-ui"
+      ],
       "runtimes": {
         "claude": {
-          "skills": ["skills/frontend/react-vite"],
-          "commands": ["ui-check"]
+          "skills": [
+            "skills/frontend/react-vite"
+          ],
+          "commands": [
+            "ui-check"
+          ]
         },
         "codex": {
-          "skills": ["skills/frontend/react-vite"]
+          "skills": [
+            "skills/frontend/react-vite"
+          ]
         }
       }
     },
@@ -39,45 +66,102 @@
       "id": "nextjs",
       "name": "Next.js",
       "bucket": "detected",
-      "triggers": ["next.config.js", "next.config.mjs", "next", "nextjs"],
-      "requires": ["frontend-patterns"],
-      "optional": ["playwright-ui"],
+      "triggers": [
+        "next.config.js",
+        "next.config.mjs",
+        "next",
+        "nextjs"
+      ],
+      "requires": [
+        "frontend-patterns"
+      ],
+      "optional": [
+        "playwright-ui"
+      ],
       "runtimes": {
-        "claude": { "skills": ["skills/frontend/nextjs"] },
-        "codex": { "skills": ["skills/frontend/nextjs"] }
+        "claude": {
+          "skills": [
+            "skills/frontend/nextjs"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "skills/frontend/nextjs"
+          ]
+        }
       }
     },
     {
       "id": "node-firebase",
       "name": "Node Firebase",
       "bucket": "detected",
-      "triggers": ["firebase.json", "firebase", "firebase-admin"],
-      "requires": ["backend-patterns"],
-      "optional": ["security-review"],
+      "triggers": [
+        "firebase.json",
+        "firebase",
+        "firebase-admin"
+      ],
+      "requires": [
+        "backend-patterns"
+      ],
+      "optional": [
+        "security-review"
+      ],
       "runtimes": {
-        "claude": { "skills": ["skills/backend/node-firebase"] },
-        "codex": { "skills": ["skills/backend/node-firebase"] }
+        "claude": {
+          "skills": [
+            "skills/backend/node-firebase"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "skills/backend/node-firebase"
+          ]
+        }
       }
     },
     {
       "id": "playwright-ui",
       "name": "Playwright UI Verification",
       "bucket": "detected",
-      "triggers": ["playwright.config.js", "playwright.config.ts", "@playwright/test"],
-      "requires": ["verification-loop"],
+      "triggers": [
+        "playwright.config.js",
+        "playwright.config.ts",
+        "@playwright/test"
+      ],
+      "requires": [
+        "verification-loop"
+      ],
       "optional": [],
       "runtimes": {
-        "claude": { "skills": ["skills/verification/playwright-ui"], "commands": ["ui-check"] },
-        "codex": { "skills": ["skills/verification/playwright-ui"] }
+        "claude": {
+          "skills": [
+            "skills/verification/playwright-ui"
+          ],
+          "commands": [
+            "ui-check"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "skills/verification/playwright-ui"
+          ]
+        }
       }
     },
     {
-      "id": "mp-diagnose",
+      "id": "diagnose",
       "name": "Diagnose",
       "bucket": "library",
-      "triggers": ["debug", "bug", "regression", "performance"],
+      "triggers": [
+        "debug",
+        "bug",
+        "regression",
+        "performance"
+      ],
       "requires": [],
-      "optional": ["playwright-ui"],
+      "optional": [
+        "playwright-ui"
+      ],
       "source": {
         "type": "github",
         "repo": "mattpocock/skills",
@@ -85,17 +169,35 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#diagnose"] },
-        "codex": { "skills": ["github:mattpocock/skills#diagnose"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#diagnose"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#diagnose"
+          ]
+        }
       }
     },
     {
-      "id": "mp-tdd",
+      "id": "tdd",
       "name": "TDD",
       "bucket": "detected",
-      "triggers": ["test", "tests", "playwright", "cypress", "@playwright/test", "vitest", "jest"],
+      "triggers": [
+        "test",
+        "tests",
+        "playwright",
+        "cypress",
+        "@playwright/test",
+        "vitest",
+        "jest"
+      ],
       "requires": [],
-      "optional": ["playwright-ui"],
+      "optional": [
+        "playwright-ui"
+      ],
       "source": {
         "type": "github",
         "repo": "mattpocock/skills",
@@ -103,15 +205,28 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#tdd"] },
-        "codex": { "skills": ["github:mattpocock/skills#tdd"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#tdd"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#tdd"
+          ]
+        }
       }
     },
     {
-      "id": "mp-setup-skills",
+      "id": "setup-skills",
       "name": "Setup Matt Pocock Skills",
       "bucket": "library",
-      "triggers": ["setup skills", "issue tracker", "triage labels", "domain docs"],
+      "triggers": [
+        "setup skills",
+        "issue tracker",
+        "triage labels",
+        "domain docs"
+      ],
       "requires": [],
       "optional": [],
       "source": {
@@ -121,17 +236,31 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#setup-matt-pocock-skills"] },
-        "codex": { "skills": ["github:mattpocock/skills#setup-matt-pocock-skills"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#setup-matt-pocock-skills"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#setup-matt-pocock-skills"
+          ]
+        }
       }
     },
     {
-      "id": "mp-grill-with-docs",
+      "id": "grill-with-docs",
       "name": "Grill With Docs",
       "bucket": "library",
-      "triggers": ["plan", "spec", "prd", "architecture", "domain"],
+      "triggers": [
+        "plan",
+        "spec",
+        "prd",
+        "architecture",
+        "domain"
+      ],
       "requires": [],
-      "optional": ["mp-ubiquitous-language"],
+      "optional": [],
       "source": {
         "type": "github",
         "repo": "mattpocock/skills",
@@ -139,15 +268,27 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#grill-with-docs"] },
-        "codex": { "skills": ["github:mattpocock/skills#grill-with-docs"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#grill-with-docs"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#grill-with-docs"
+          ]
+        }
       }
     },
     {
-      "id": "mp-grill-me",
+      "id": "grill-me",
       "name": "Grill Me",
       "bucket": "library",
-      "triggers": ["brainstorm", "requirements", "unclear"],
+      "triggers": [
+        "brainstorm",
+        "requirements",
+        "unclear"
+      ],
       "requires": [],
       "optional": [],
       "source": {
@@ -157,17 +298,32 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#grill-me"] },
-        "codex": { "skills": ["github:mattpocock/skills#grill-me"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#grill-me"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#grill-me"
+          ]
+        }
       }
     },
     {
-      "id": "mp-improve-codebase-architecture",
+      "id": "improve-codebase-architecture",
       "name": "Improve Codebase Architecture",
       "bucket": "library",
-      "triggers": ["architecture", "refactor", "modularize", "cleanup"],
+      "triggers": [
+        "architecture",
+        "refactor",
+        "modularize",
+        "cleanup"
+      ],
       "requires": [],
-      "optional": ["mp-zoom-out"],
+      "optional": [
+        "zoom-out"
+      ],
       "source": {
         "type": "github",
         "repo": "mattpocock/skills",
@@ -175,15 +331,28 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#improve-codebase-architecture"] },
-        "codex": { "skills": ["github:mattpocock/skills#improve-codebase-architecture"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#improve-codebase-architecture"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#improve-codebase-architecture"
+          ]
+        }
       }
     },
     {
-      "id": "mp-zoom-out",
+      "id": "zoom-out",
       "name": "Zoom Out",
       "bucket": "library",
-      "triggers": ["unfamiliar", "explain", "context", "architecture"],
+      "triggers": [
+        "unfamiliar",
+        "explain",
+        "context",
+        "architecture"
+      ],
       "requires": [],
       "optional": [],
       "source": {
@@ -193,17 +362,31 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#zoom-out"] },
-        "codex": { "skills": ["github:mattpocock/skills#zoom-out"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#zoom-out"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#zoom-out"
+          ]
+        }
       }
     },
     {
-      "id": "mp-to-prd",
+      "id": "to-prd",
       "name": "To PRD",
       "bucket": "library",
-      "triggers": ["prd", "product requirements", "feature spec"],
+      "triggers": [
+        "prd",
+        "product requirements",
+        "feature spec"
+      ],
       "requires": [],
-      "optional": ["mp-to-issues"],
+      "optional": [
+        "to-issues"
+      ],
       "source": {
         "type": "github",
         "repo": "mattpocock/skills",
@@ -211,17 +394,31 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#to-prd"] },
-        "codex": { "skills": ["github:mattpocock/skills#to-prd"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#to-prd"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#to-prd"
+          ]
+        }
       }
     },
     {
-      "id": "mp-to-issues",
+      "id": "to-issues",
       "name": "To Issues",
       "bucket": "library",
-      "triggers": ["issues", "tickets", "vertical slices"],
+      "triggers": [
+        "issues",
+        "tickets",
+        "vertical slices"
+      ],
       "requires": [],
-      "optional": ["mp-triage"],
+      "optional": [
+        "triage"
+      ],
       "source": {
         "type": "github",
         "repo": "mattpocock/skills",
@@ -229,15 +426,27 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#to-issues"] },
-        "codex": { "skills": ["github:mattpocock/skills#to-issues"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#to-issues"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#to-issues"
+          ]
+        }
       }
     },
     {
-      "id": "mp-triage",
+      "id": "triage",
       "name": "Triage",
       "bucket": "library",
-      "triggers": ["triage", "issue", "bug report"],
+      "triggers": [
+        "triage",
+        "issue",
+        "bug report"
+      ],
       "requires": [],
       "optional": [],
       "source": {
@@ -247,15 +456,27 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#triage"] },
-        "codex": { "skills": ["github:mattpocock/skills#triage"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#triage"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#triage"
+          ]
+        }
       }
     },
     {
-      "id": "mp-prototype",
+      "id": "prototype",
       "name": "Prototype",
       "bucket": "library",
-      "triggers": ["prototype", "spike", "explore design"],
+      "triggers": [
+        "prototype",
+        "spike",
+        "explore design"
+      ],
       "requires": [],
       "optional": [],
       "source": {
@@ -265,51 +486,27 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#prototype"] },
-        "codex": { "skills": ["github:mattpocock/skills#prototype"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#prototype"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#prototype"
+          ]
+        }
       }
     },
     {
-      "id": "mp-caveman",
-      "name": "Caveman",
-      "bucket": "library",
-      "triggers": ["compress", "brief", "tokens", "caveman"],
-      "requires": [],
-      "optional": [],
-      "source": {
-        "type": "github",
-        "repo": "mattpocock/skills",
-        "skill": "caveman",
-        "license": "MIT"
-      },
-      "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#caveman"] },
-        "codex": { "skills": ["github:mattpocock/skills#caveman"] }
-      }
-    },
-    {
-      "id": "mp-handoff",
-      "name": "Handoff",
-      "bucket": "library",
-      "triggers": ["handoff", "resume", "compact"],
-      "requires": [],
-      "optional": [],
-      "source": {
-        "type": "github",
-        "repo": "mattpocock/skills",
-        "skill": "handoff",
-        "license": "MIT"
-      },
-      "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#handoff"] },
-        "codex": { "skills": ["github:mattpocock/skills#handoff"] }
-      }
-    },
-    {
-      "id": "mp-write-a-skill",
+      "id": "write-a-skill",
       "name": "Write A Skill",
       "bucket": "library",
-      "triggers": ["new skill", "write a skill", "skill authoring"],
+      "triggers": [
+        "new skill",
+        "write a skill",
+        "skill authoring"
+      ],
       "requires": [],
       "optional": [],
       "source": {
@@ -319,15 +516,27 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#write-a-skill"] },
-        "codex": { "skills": ["github:mattpocock/skills#write-a-skill"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#write-a-skill"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#write-a-skill"
+          ]
+        }
       }
     },
     {
-      "id": "mp-git-guardrails-claude-code",
+      "id": "git-guardrails-claude-code",
       "name": "Git Guardrails Claude Code",
       "bucket": "library",
-      "triggers": ["git guardrails", "dangerous git", "hooks"],
+      "triggers": [
+        "git guardrails",
+        "dangerous git",
+        "hooks"
+      ],
       "requires": [],
       "optional": [],
       "source": {
@@ -337,14 +546,22 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#git-guardrails-claude-code"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#git-guardrails-claude-code"
+          ]
+        }
       }
     },
     {
-      "id": "mp-setup-pre-commit",
+      "id": "setup-pre-commit",
       "name": "Setup Pre Commit",
       "bucket": "library",
-      "triggers": ["pre-commit", "husky", "lint-staged"],
+      "triggers": [
+        "pre-commit",
+        "husky",
+        "lint-staged"
+      ],
       "requires": [],
       "optional": [],
       "source": {
@@ -354,17 +571,31 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#setup-pre-commit"] },
-        "codex": { "skills": ["github:mattpocock/skills#setup-pre-commit"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#setup-pre-commit"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#setup-pre-commit"
+          ]
+        }
       }
     },
     {
-      "id": "mp-obsidian-vault",
+      "id": "obsidian-vault",
       "name": "Obsidian Vault",
       "bucket": "library",
-      "triggers": ["obsidian", "vault", "knowledge graph"],
+      "triggers": [
+        "obsidian",
+        "vault",
+        "knowledge graph"
+      ],
       "requires": [],
-      "optional": ["mp-handoff"],
+      "optional": [
+        "threadline-core"
+      ],
       "source": {
         "type": "github",
         "repo": "mattpocock/skills",
@@ -372,8 +603,16 @@
         "license": "MIT"
       },
       "runtimes": {
-        "claude": { "skills": ["github:mattpocock/skills#obsidian-vault"] },
-        "codex": { "skills": ["github:mattpocock/skills#obsidian-vault"] }
+        "claude": {
+          "skills": [
+            "github:mattpocock/skills#obsidian-vault"
+          ]
+        },
+        "codex": {
+          "skills": [
+            "github:mattpocock/skills#obsidian-vault"
+          ]
+        }
       }
     }
   ]

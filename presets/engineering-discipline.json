@@ -3,21 +3,25 @@
   "name": "Engineering Discipline",
   "skills": [
     "threadline-core",
-    "mp-setup-skills",
-    "mp-diagnose",
-    "mp-tdd",
-    "mp-grill-with-docs",
-    "mp-grill-me",
-    "mp-improve-codebase-architecture",
-    "mp-zoom-out",
-    "mp-to-prd",
-    "mp-to-issues",
-    "mp-triage",
-    "mp-prototype",
-    "mp-caveman",
-    "mp-handoff",
-    "mp-write-a-skill"
+    "setup-skills",
+    "diagnose",
+    "tdd",
+    "grill-with-docs",
+    "grill-me",
+    "improve-codebase-architecture",
+    "zoom-out",
+    "to-prd",
+    "to-issues",
+    "triage",
+    "prototype",
+    "write-a-skill"
   ],
-  "mcp": ["github", "memory"],
-  "runtimes": ["claude", "codex"]
+  "mcp": [
+    "github",
+    "memory"
+  ],
+  "runtimes": [
+    "claude",
+    "codex"
+  ]
 }

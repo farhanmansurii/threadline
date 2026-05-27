@@ -17,23 +17,32 @@ Curated Threadline picks:
 
 | Threadline ID | Upstream Skill | Use |
 | --- | --- | --- |
-| `mp-setup-skills` | `setup-matt-pocock-skills` | Configure repo assumptions for issue tracker, labels, and domain docs |
-| `mp-diagnose` | `diagnose` | Disciplined debugging loop |
-| `mp-tdd` | `tdd` | Red-green-refactor workflow |
-| `mp-grill-with-docs` | `grill-with-docs` | Requirements clarification plus docs |
-| `mp-grill-me` | `grill-me` | Requirements clarification without repo docs |
-| `mp-improve-codebase-architecture` | `improve-codebase-architecture` | Architecture deepening/refactor opportunities |
-| `mp-zoom-out` | `zoom-out` | High-level codebase orientation |
-| `mp-to-prd` | `to-prd` | Convert context into a PRD |
-| `mp-to-issues` | `to-issues` | Break plans into vertical issue slices |
-| `mp-triage` | `triage` | Issue state-machine triage |
-| `mp-prototype` | `prototype` | Throwaway design/business-logic exploration |
-| `mp-caveman` | `caveman` | Token compression |
-| `mp-handoff` | `handoff` | Session handoff pattern |
-| `mp-write-a-skill` | `write-a-skill` | Skill authoring |
-| `mp-git-guardrails-claude-code` | `git-guardrails-claude-code` | Claude hook guardrails for dangerous git |
-| `mp-setup-pre-commit` | `setup-pre-commit` | Husky/lint-staged/pre-commit setup |
-| `mp-obsidian-vault` | `obsidian-vault` | Obsidian vault workflow inspiration |
+| `setup-skills` | `setup-matt-pocock-skills` | Configure repo assumptions for issue tracker, labels, and domain docs |
+| `diagnose` | `diagnose` | Disciplined debugging loop |
+| `tdd` | `tdd` | Red-green-refactor workflow |
+| `grill-with-docs` | `grill-with-docs` | Requirements clarification plus docs |
+| `grill-me` | `grill-me` | Requirements clarification without repo docs |
+| `improve-codebase-architecture` | `improve-codebase-architecture` | Architecture deepening/refactor opportunities |
+| `zoom-out` | `zoom-out` | High-level codebase orientation |
+| `to-prd` | `to-prd` | Convert context into a PRD |
+| `to-issues` | `to-issues` | Break plans into vertical issue slices |
+| `triage` | `triage` | Issue state-machine triage |
+| `prototype` | `prototype` | Throwaway design/business-logic exploration |
+| `write-a-skill` | `write-a-skill` | Skill authoring |
+| `git-guardrails-claude-code` | `git-guardrails-claude-code` | Claude hook guardrails for dangerous git |
+| `setup-pre-commit` | `setup-pre-commit` | Husky/lint-staged/pre-commit setup |
+| `obsidian-vault` | `obsidian-vault` | Obsidian vault workflow inspiration |
+
+## Conflict Policy
+
+Some upstream skills overlap with Threadline core behavior and are intentionally not registered as separate installable packs:
+
+| Upstream Skill | Threadline Owner |
+| --- | --- |
+| `handoff` | Threadline core handoff/resume commands |
+| `caveman` | Threadline token strategy and future local compression skill |
+
+The upstream implementations may still be studied for design inspiration, but Threadline should expose one canonical skill ID for each behavior.
 
 ## Design Borrowed By Threadline
 

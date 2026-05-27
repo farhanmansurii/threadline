@@ -1,7 +1,17 @@
 {
   "id": "node-firebase",
   "name": "Node Firebase",
-  "skills": ["threadline-core", "node-firebase"],
-  "mcp": ["context7", "github", "memory"],
-  "runtimes": ["claude", "codex"]
+  "skills": [
+    "threadline-core",
+    "node-firebase"
+  ],
+  "mcp": [
+    "context7",
+    "github",
+    "memory"
+  ],
+  "runtimes": [
+    "claude",
+    "codex"
+  ]
 }

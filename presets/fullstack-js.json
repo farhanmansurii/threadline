@@ -7,15 +7,22 @@
     "nextjs",
     "node-firebase",
     "playwright-ui",
-    "mp-diagnose",
-    "mp-tdd",
-    "mp-grill-with-docs",
-    "mp-improve-codebase-architecture",
-    "mp-zoom-out",
-    "mp-prototype",
-    "mp-caveman",
-    "mp-write-a-skill"
+    "diagnose",
+    "tdd",
+    "grill-with-docs",
+    "improve-codebase-architecture",
+    "zoom-out",
+    "prototype",
+    "write-a-skill"
   ],
-  "mcp": ["context7", "github", "memory", "playwright"],
-  "runtimes": ["claude", "codex"]
+  "mcp": [
+    "context7",
+    "github",
+    "memory",
+    "playwright"
+  ],
+  "runtimes": [
+    "claude",
+    "codex"
+  ]
 }

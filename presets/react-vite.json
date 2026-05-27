@@ -1,7 +1,18 @@
 {
   "id": "react-vite",
   "name": "React Vite",
-  "skills": ["threadline-core", "react-vite", "playwright-ui"],
-  "mcp": ["context7", "memory", "playwright"],
-  "runtimes": ["claude", "codex"]
+  "skills": [
+    "threadline-core",
+    "react-vite",
+    "playwright-ui"
+  ],
+  "mcp": [
+    "context7",
+    "memory",
+    "playwright"
+  ],
+  "runtimes": [
+    "claude",
+    "codex"
+  ]
 }

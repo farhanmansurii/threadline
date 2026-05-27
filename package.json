@@ -1,6 +1,6 @@
 {
   "name": "threadline-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Portable agent runtime manager for Claude Code, Codex, Cursor, OpenCode, Kimi, and any CLI. Multi-runtime skills, project detection, RAG indexing, and Obsidian handoffs.",
   "type": "module",
   "bin": {

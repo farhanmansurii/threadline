@@ -14,6 +14,7 @@ import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
 import { normalizeRuntimes } from './adapters/index.mjs';
 import { printPlan } from './utils/print.mjs';
+import { splash } from './utils/ascii.mjs';
 
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
@@ -52,6 +53,8 @@ export async function main(argv) {
     console.log(VERSION);
     return;
   }
+
+  console.log(splash(VERSION));
 
   if (command === 'paths') {
     console.log(JSON.stringify(getThreadlinePaths(), null, 2));

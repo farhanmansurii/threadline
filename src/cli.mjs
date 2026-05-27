@@ -25,6 +25,7 @@ import {
   generateToolStackInstructions,
   TOOL_REGISTRY,
 } from './utils/external-tools.mjs';
+import { splash } from './utils/ascii.mjs';
 
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
@@ -74,6 +75,7 @@ function guardCancel(value, msg = 'Operation cancelled.') {
 // ── command handlers ──────────────────────────────────────────────────────────
 
 async function runSetup(flags) {
+  console.log(splash(VERSION));
   p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('setup')}`);
 
   const known = listAdapters();
@@ -207,6 +209,7 @@ async function runSetup(flags) {
 }
 
 async function runSkillsInstall(flags, rest) {
+  console.log(splash(VERSION));
   p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('skills install')}`);
 
   const known = listAdapters();
@@ -369,6 +372,7 @@ async function runDetect(flags) {
 }
 
 async function runInit(flags) {
+  console.log(splash(VERSION));
   p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('init')}`);
 
   const s = p.spinner();
@@ -450,6 +454,7 @@ async function runInit(flags) {
 }
 
 async function runIndex(flags) {
+  console.log(splash(VERSION));
   p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('index')}`);
 
   const s = p.spinner();
@@ -481,6 +486,7 @@ async function runIndex(flags) {
 }
 
 async function runHandoffCreate(flags) {
+  console.log(splash(VERSION));
   p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('handoff create')}`);
 
   const s = p.spinner();
@@ -668,6 +674,7 @@ async function runPreferences(subcommand, flags) {
   let runtimes = flags.runtimes ? parseList(flags.runtimes) : null;
 
   if (!flags.yes) {
+    console.log(splash(VERSION));
     p.intro(chalk.bold('Threadline preferences'));
 
     if (cavemanMode === null) {

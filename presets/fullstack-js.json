@@ -1,0 +1,7 @@
+{
+  "id": "fullstack-js",
+  "name": "Fullstack JavaScript",
+  "skills": ["relaykit-core", "react-vite", "nextjs", "node-firebase", "playwright-ui"],
+  "mcp": ["context7", "github", "memory", "playwright"],
+  "runtimes": ["claude", "codex"]
+}

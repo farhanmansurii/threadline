@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaykit.dev/schemas/skill-pack.schema.json",
+  "title": "RelayKit Skill Pack",
+  "type": "object",
+  "required": ["id", "name", "bucket", "triggers", "runtimes"],
+  "properties": {
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "bucket": { "enum": ["core", "detected", "library"] },
+    "triggers": { "type": "array", "items": { "type": "string" } },
+    "requires": { "type": "array", "items": { "type": "string" } },
+    "optional": { "type": "array", "items": { "type": "string" } },
+    "runtimes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "skills": { "type": "array", "items": { "type": "string" } },
+          "commands": { "type": "array", "items": { "type": "string" } },
+          "settings": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

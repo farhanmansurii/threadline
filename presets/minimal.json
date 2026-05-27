@@ -1,0 +1,7 @@
+{
+  "id": "minimal",
+  "name": "Minimal",
+  "skills": ["relaykit-core"],
+  "mcp": ["memory"],
+  "runtimes": ["claude", "codex"]
+}

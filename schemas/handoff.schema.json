@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaykit.dev/schemas/handoff.schema.json",
+  "title": "RelayKit Handoff",
+  "type": "object",
+  "required": ["id", "projectId", "createdAt", "summary", "nextActions"],
+  "properties": {
+    "id": { "type": "string" },
+    "projectId": { "type": "string" },
+    "feature": { "type": ["string", "null"] },
+    "folder": { "type": ["string", "null"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "summary": { "type": "string" },
+    "decisions": { "type": "array", "items": { "type": "string" } },
+    "changedFiles": { "type": "array", "items": { "type": "string" } },
+    "commandsRun": { "type": "array", "items": { "type": "string" } },
+    "verification": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "nextActions": { "type": "array", "items": { "type": "string" } }
+  }
+}

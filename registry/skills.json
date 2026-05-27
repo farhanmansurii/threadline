@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "relaykit-core",
+      "name": "RelayKit Core",
+      "bucket": "core",
+      "triggers": ["always"],
+      "requires": [],
+      "optional": [],
+      "runtimes": {
+        "claude": {
+          "skills": ["skills/core/relaykit"],
+          "commands": ["handoff", "resume", "context", "learnings"]
+        },
+        "codex": {
+          "skills": ["skills/core/relaykit"]
+        }
+      }
+    },
+    {
+      "id": "react-vite",
+      "name": "React Vite",
+      "bucket": "detected",
+      "triggers": ["vite.config.js", "vite.config.ts", "react", "jsx", "tsx"],
+      "requires": ["frontend-patterns"],
+      "optional": ["playwright-ui"],
+      "runtimes": {
+        "claude": {
+          "skills": ["skills/frontend/react-vite"],
+          "commands": ["ui-check"]
+        },
+        "codex": {
+          "skills": ["skills/frontend/react-vite"]
+        }
+      }
+    },
+    {
+      "id": "nextjs",
+      "name": "Next.js",
+      "bucket": "detected",
+      "triggers": ["next.config.js", "next.config.mjs", "next"],
+      "requires": ["frontend-patterns"],
+      "optional": ["playwright-ui"],
+      "runtimes": {
+        "claude": { "skills": ["skills/frontend/nextjs"] },
+        "codex": { "skills": ["skills/frontend/nextjs"] }
+      }
+    },
+    {
+      "id": "node-firebase",
+      "name": "Node Firebase",
+      "bucket": "detected",
+      "triggers": ["firebase.json", "firebase", "firebase-admin"],
+      "requires": ["backend-patterns"],
+      "optional": ["security-review"],
+      "runtimes": {
+        "claude": { "skills": ["skills/backend/node-firebase"] },
+        "codex": { "skills": ["skills/backend/node-firebase"] }
+      }
+    },
+    {
+      "id": "playwright-ui",
+      "name": "Playwright UI Verification",
+      "bucket": "detected",
+      "triggers": ["playwright.config.js", "playwright.config.ts", "@playwright/test"],
+      "requires": ["verification-loop"],
+      "optional": [],
+      "runtimes": {
+        "claude": { "skills": ["skills/verification/playwright-ui"], "commands": ["ui-check"] },
+        "codex": { "skills": ["skills/verification/playwright-ui"] }
+      }
+    }
+  ]
+}

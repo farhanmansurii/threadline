@@ -1,0 +1,12 @@
+# BEGIN RELAYKIT_MANAGED
+[features]
+multi_agent = true
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["-y", "@playwright/mcp@latest"]
+# END RELAYKIT_MANAGED

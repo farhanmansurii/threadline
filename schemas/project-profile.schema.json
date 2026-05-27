@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaykit.dev/schemas/project-profile.schema.json",
+  "title": "RelayKit Project Profile",
+  "type": "object",
+  "required": ["id", "name", "root", "stacks", "recommendedPresets"],
+  "properties": {
+    "id": { "type": "string", "minLength": 12, "maxLength": 12 },
+    "name": { "type": "string" },
+    "root": { "type": "string" },
+    "remote": { "type": ["string", "null"] },
+    "packageManager": { "type": "string" },
+    "stacks": { "type": "array", "items": { "type": "string" } },
+    "recommendedPresets": { "type": "array", "items": { "type": "string" } },
+    "evidence": { "type": "array", "items": { "type": "string" } }
+  }
+}

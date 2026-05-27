@@ -1,0 +1,7 @@
+{
+  "id": "node-firebase",
+  "name": "Node Firebase",
+  "skills": ["relaykit-core", "node-firebase"],
+  "mcp": ["context7", "github", "memory"],
+  "runtimes": ["claude", "codex"]
+}

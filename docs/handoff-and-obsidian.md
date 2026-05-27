@@ -24,10 +24,14 @@ Obsidian Vault/
 Claude Code can expose `/handoff` through a slash command. Codex, Cursor, OpenCode, and Kimi use explicit CLI commands.
 
 ```bash
+# With global install:
 threadline handoff create
 threadline handoff create --title "RMS Dashboard" --summary "Continue dashboard work."
 threadline handoff create --vault ~/Documents/Obsidian
 threadline resume rms-dashboard-2026-05-27-a7f3
+
+# With npx:
+npx threadline-cli handoff create --title "RMS Dashboard"
 ```
 
 The handoff writer should capture:

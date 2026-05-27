@@ -1,5 +1,7 @@
 # Commands
 
+> **Note:** After a global install (`npm install -g threadline-cli`), use `threadline <command>`. With `npx`, use `npx threadline-cli <command>`.
+
 ## `threadline setup`
 
 Installs or syncs user-level runtime setup.

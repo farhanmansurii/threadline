@@ -60,7 +60,7 @@ Threadline solves all three with a single, portable runtime layer.
 ### One-Line Setup
 
 ```bash
-npx threadline setup
+npx threadline-cli setup
 ```
 
 This launches an interactive onboarding that scans your system, detects installed AI runtimes, and asks which ones to configure.
@@ -68,17 +68,17 @@ This launches an interactive onboarding that scans your system, detects installe
 ### Inside a Project
 
 ```bash
-npx threadline init --local
-npx threadline index
-npx threadline handoff create --title "Implemented auth flow"
+npx threadline-cli init --local
+npx threadline-cli index
+npx threadline-cli handoff create --title "Implemented auth flow"
 ```
 
 ### Non-Interactive / CI Mode
 
 ```bash
-npx threadline setup --replace --yes --runtimes claude,codex
-npx threadline init --path ./my-project --local
-npx threadline detect --path ./my-project --json
+npx threadline-cli setup --replace --yes --runtimes claude,codex
+npx threadline-cli init --path ./my-project --local
+npx threadline-cli detect --path ./my-project --json
 ```
 
 ### Generic CLI Support
@@ -86,7 +86,7 @@ npx threadline detect --path ./my-project --json
 Threadline works with tools it has never heard of:
 
 ```bash
-npx threadline setup --merge --runtimes gemini,pi,my-custom-cli
+npx threadline-cli setup --merge --runtimes gemini,pi,my-custom-cli
 ```
 
 ## Installation

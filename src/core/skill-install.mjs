@@ -79,8 +79,16 @@ async function cleanKnownSkillDirs(runtime, packs) {
   if (!adapter.supports.skills) return;
   const skillsHome = path.join(adapter.homeDir, 'skills');
   await ensureDir(skillsHome);
+  const dirsToClean = new Set();
   for (const pack of packs) {
-    await removePath(path.join(skillsHome, pack.id));
+    dirsToClean.add(pack.id);
+    // Also clean command-named skill dirs (e.g. handoff, resume for threadline-core on Codex).
+    for (const command of pack.runtimes?.[runtime]?.commands ?? []) {
+      dirsToClean.add(command);
+    }
+  }
+  for (const dir of dirsToClean) {
+    await removePath(path.join(skillsHome, dir));
   }
 }
 

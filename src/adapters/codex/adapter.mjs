@@ -15,10 +15,40 @@ export async function installSkills(sourceDir, { replace = false } = {}) {
   return copyDir(sourceDir, targetDir);
 }
 
-export async function installCommands() {
-  // Codex does not support per-file command installation.
-  // Slash commands are written in bulk by finalizeInstall via AGENTS.md.
-  return [];
+/**
+ * Install Codex slash commands as individual skill files.
+ *
+ * Codex's slash command picker reads `name:` from each SKILL.md frontmatter
+ * in ~/.codex/skills/. Each command in a pack gets its own skill directory so
+ * `/handoff`, `/resume`, etc. appear as native slash commands in the TUI.
+ *
+ * Template resolution order:
+ *   1. templates/codex/command-<command>.md  (Codex-specific, preferred)
+ *   2. templates/claude/command-<command>.md (Claude template as fallback)
+ *   3. Auto-generated minimal skill stub
+ */
+export async function installCommands(commands) {
+  const results = [];
+  for (const command of commands) {
+    const content = await resolveCommandTemplate(command);
+    const targetDir = path.join(homeDir, 'skills', command);
+    await ensureDir(targetDir);
+    results.push(await writeTextIfChanged(path.join(targetDir, 'SKILL.md'), content));
+  }
+  return results;
+}
+
+async function resolveCommandTemplate(command) {
+  // Try Codex-specific template first, then Claude template, then generate a stub.
+  const candidates = [
+    `templates/codex/command-${command}.md`,
+    `templates/claude/command-${command}.md`,
+  ];
+  for (const tpl of candidates) {
+    const content = await readTemplate(tpl).catch(() => null);
+    if (content) return content;
+  }
+  return `---\nname: ${command}\ndescription: ${command} — Threadline skill\n---\n\n# ${command}\n\nRun the ${command} Threadline workflow.\n`;
 }
 
 /**

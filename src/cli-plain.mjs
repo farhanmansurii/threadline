@@ -46,6 +46,12 @@ export async function main(argv) {
     return;
   }
 
+  if (command === 'onboard') {
+    const { onboardCommand } = await import('./commands/onboard.mjs');
+    await onboardCommand(flags);
+    return;
+  }
+
   if (command === 'detect') {
     const profile = await detectProject(flags.path || process.cwd());
     if (flags.json) console.log(JSON.stringify(profile, null, 2));

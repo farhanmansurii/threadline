@@ -507,14 +507,14 @@ export async function executeApplyPreferences({ cavemanMode = 'off', thinkingEna
     if (thinkingEnabled !== undefined) {
       next.alwaysThinkingEnabled = Boolean(thinkingEnabled);
     }
-    // Add a caveman indicator to the status line so it's visible at a glance
-    const modeEmoji = { lite: '🗿', full: '🗿🗿', ultra: '🗿🗿🗿', wenyan: '甲', off: '' };
+    // Add a caveman status line that runs a script to display the active mode.
+    // statusLine must be { type: "command", command: "..." } — not a plain string.
+    const scriptPath = expandHome('~/.claude/statusline-caveman.sh');
     if (cavemanMode !== 'off') {
-      const label = `caveman:${cavemanMode} ${modeEmoji[cavemanMode] ?? ''}`.trim();
-      next.statusLine = label;
+      next.statusLine = { type: 'command', command: scriptPath };
     } else {
-      // Remove caveman from statusLine if turning off — leave other content intact
-      if (typeof next.statusLine === 'string' && next.statusLine.startsWith('caveman:')) {
+      // Only remove if we own it (our script path)
+      if (next.statusLine?.command === scriptPath || typeof next.statusLine === 'string') {
         delete next.statusLine;
       }
     }

@@ -14,6 +14,7 @@ import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
 import { listAdapters, normalizeRuntimes } from './adapters/index.mjs';
+import { onboardCommand } from './commands/onboard.mjs';
 
 // ── tiny helpers ──────────────────────────────────────────────────────────────
 
@@ -568,6 +569,7 @@ function printHelp() {
 ${chalk.bold('Threadline')} ${chalk.dim('— portable agent runtime manager')}
 
 ${chalk.bold('Usage')}
+  ${chalk.cyan('threadline onboard')}   ${chalk.dim('Interactive first-time setup wizard')}
   ${chalk.cyan('threadline setup')}     ${chalk.dim('[--merge|--adopt|--replace] [--runtimes claude,codex,cursor,kimi,opencode,...] [--caveman-mode full|lite|ultra|wenyan|off] [--yes] [--dry-run]')}
   ${chalk.cyan('threadline init')}      ${chalk.dim('[--path <dir>] [--local|--repo] [--dry-run]')}
   ${chalk.cyan('threadline detect')}    ${chalk.dim('[--path <dir>] [--json]')}
@@ -616,6 +618,7 @@ export async function main(argv) {
   }
 
   if (command === 'detect')  { await runDetect(flags); return; }
+  if (command === 'onboard') { await onboardCommand(flags); return; }
   if (command === 'setup')   { await runSetup(flags); return; }
   if (command === 'init')    { await runInit(flags); return; }
   if (command === 'index')   { await runIndex(flags); return; }

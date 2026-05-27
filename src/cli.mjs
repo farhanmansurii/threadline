@@ -773,7 +773,7 @@ function printPlanInteractive(plan) {
 
 function printHelp() {
   console.log(`
-${chalk.bold('Threadline')} ${chalk.dim(`v${VERSION} — portable agent runtime manager`)
+${chalk.bold('Threadline')} ${chalk.dim('v' + VERSION + ' — portable agent runtime manager')}
 
 ${chalk.bold('Usage')}
   ${chalk.cyan('threadline onboard')}   ${chalk.dim('Interactive first-time setup wizard')}

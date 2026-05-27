@@ -1,5 +1,13 @@
 #!/usr/bin/env node
-import { main } from '../src/cli.mjs';
+
+// Interactive mode when stdout is a real terminal.
+// Plain mode when piped, redirected, or --json is passed.
+const isTTY = process.stdout.isTTY && process.stdin.isTTY;
+const hasJsonFlag = process.argv.includes('--json');
+
+const { main } = await import(
+  isTTY && !hasJsonFlag ? '../src/cli.mjs' : '../src/cli-plain.mjs'
+);
 
 main(process.argv.slice(2)).catch((error) => {
   console.error(error?.stack || error?.message || String(error));

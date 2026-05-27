@@ -30,6 +30,12 @@
         "codex": {
           "skills": [
             "skills/core/threadline"
+          ],
+          "commands": [
+            "handoff",
+            "resume",
+            "context",
+            "learnings"
           ]
         }
       }
@@ -68,6 +74,9 @@
         "codex": {
           "skills": [
             "skills/frontend/react-vite"
+          ],
+          "commands": [
+            "react-vite"
           ]
         }
       }
@@ -102,6 +111,9 @@
         "codex": {
           "skills": [
             "skills/frontend/nextjs"
+          ],
+          "commands": [
+            "nextjs"
           ]
         }
       }
@@ -135,6 +147,9 @@
         "codex": {
           "skills": [
             "skills/backend/node-firebase"
+          ],
+          "commands": [
+            "node-firebase"
           ]
         }
       }
@@ -169,6 +184,9 @@
         "codex": {
           "skills": [
             "skills/verification/playwright-ui"
+          ],
+          "commands": [
+            "playwright-ui"
           ]
         }
       }
@@ -198,6 +216,9 @@
         "codex": {
           "skills": [
             "skills/learning/auto-learning"
+          ],
+          "commands": [
+            "auto-learning"
           ]
         }
       }
@@ -231,6 +252,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#diagnose"
+          ],
+          "commands": [
+            "diagnose"
           ]
         }
       }
@@ -267,6 +291,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#tdd"
+          ],
+          "commands": [
+            "tdd"
           ]
         }
       }
@@ -298,6 +325,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#setup-matt-pocock-skills"
+          ],
+          "commands": [
+            "setup-skills"
           ]
         }
       }
@@ -330,6 +360,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#grill-with-docs"
+          ],
+          "commands": [
+            "grill-with-docs"
           ]
         }
       }
@@ -360,6 +393,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#grill-me"
+          ],
+          "commands": [
+            "grill-me"
           ]
         }
       }
@@ -393,6 +429,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#improve-codebase-architecture"
+          ],
+          "commands": [
+            "improve-codebase-architecture"
           ]
         }
       }
@@ -424,6 +463,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#zoom-out"
+          ],
+          "commands": [
+            "zoom-out"
           ]
         }
       }
@@ -456,6 +498,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#to-prd"
+          ],
+          "commands": [
+            "to-prd"
           ]
         }
       }
@@ -488,6 +533,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#to-issues"
+          ],
+          "commands": [
+            "to-issues"
           ]
         }
       }
@@ -518,6 +566,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#triage"
+          ],
+          "commands": [
+            "triage"
           ]
         }
       }
@@ -548,6 +599,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#prototype"
+          ],
+          "commands": [
+            "prototype"
           ]
         }
       }
@@ -578,6 +632,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#write-a-skill"
+          ],
+          "commands": [
+            "write-a-skill"
           ]
         }
       }
@@ -633,6 +690,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#setup-pre-commit"
+          ],
+          "commands": [
+            "setup-pre-commit"
           ]
         }
       }
@@ -665,6 +725,9 @@
         "codex": {
           "skills": [
             "github:mattpocock/skills#obsidian-vault"
+          ],
+          "commands": [
+            "obsidian-vault"
           ]
         }
       }

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { readSkillRegistry } from './skills.mjs';
 import { readTemplate, repoRoot } from './templates.mjs';
-import { copyDir, ensureDir, writeTextIfChanged, removePath } from '../utils/fs.mjs';
+import { copyDir, ensureDir, writeTextIfChanged, removePath, upsertManagedBlock } from '../utils/fs.mjs';
 
 const ROOT = repoRoot();
 
@@ -26,6 +26,15 @@ export async function executeSkillInstall({ runtimes, packIds = [], all = false,
     }
   }
 
+  // Write slash command routing table to ~/.codex/AGENTS.md for all installed codex packs.
+  if (runtimes.includes('codex')) {
+    const codexPacks = selected.filter((p) => p.runtimes?.codex);
+    const agentsResult = await writeCodexSlashCommands(codexPacks);
+    if (agentsResult) results.push(agentsResult);
+  }
+
+  const written = results.filter((r) => r.changed).length;
+  const upToDate = results.filter((r) => !r.changed).length;
   return {
     title: all ? 'Install all skills' : packIds.length ? 'Install selected skills' : 'Install core skills',
     mode: replace ? 'replace' : 'merge',
@@ -35,7 +44,9 @@ export async function executeSkillInstall({ runtimes, packIds = [], all = false,
       target: result.target,
       description: result.changed ? 'Install skill pack' : 'Skill already present',
     })),
-    notes: [`Installed ${selected.length} skill packs for ${runtimes.join(', ')}.`],
+    notes: [
+      `Processed ${selected.length} skill packs for ${runtimes.join(', ')}: ${written} written, ${upToDate} already up to date.`,
+    ],
     results,
   };
 }
@@ -91,6 +102,18 @@ async function installPackForRuntime(pack, runtime, targetRoot) {
     return [...copied, ...commands];
   }
 
+  if (source?.type === 'github') {
+    const content = await fetchGithubSkill(source.repo, source.skill).catch(() => null);
+    if (content) {
+      await ensureDir(target);
+      const result = await writeTextIfChanged(path.join(target, 'SKILL.md'), content);
+      const commands = await installRuntimeCommands(pack, runtime);
+      return [result, ...commands];
+    }
+    // Network unavailable or repo structure mismatch — fall through to stub below.
+  }
+
+  // Stub fallback: pack has no local source and GitHub fetch failed/skipped.
   const wrapper = await createWrapperSkill(pack, runtime);
   const result = await writeTextIfChanged(path.join(target, 'SKILL.md'), wrapper);
   const commands = await installRuntimeCommands(pack, runtime);
@@ -114,7 +137,59 @@ async function readCommandTemplate(command) {
   return readTemplate(`templates/claude/command-${command}.md`);
 }
 
+async function fetchGithubSkill(repo, skill) {
+  // Try the two most common layouts in mattpocock/skills-style repos.
+  const candidates = [
+    `https://raw.githubusercontent.com/${repo}/main/${skill}/SKILL.md`,
+    `https://raw.githubusercontent.com/${repo}/main/skills/${skill}/SKILL.md`,
+  ];
+  for (const url of candidates) {
+    const response = await fetch(url);
+    if (response.ok) return response.text();
+  }
+  throw new Error(`GitHub skill not found: ${repo}#${skill} (tried ${candidates.length} URLs)`);
+}
+
 async function createWrapperSkill(pack, runtime) {
   const source = pack.source?.repo ? `${pack.source.repo}#${pack.source.skill}` : 'local';
   return `---\nname: ${pack.id}\ndescription: ${pack.name} (Threadline wrapper for ${source})\n---\n\n# ${pack.name}\n\nThis skill is installed by Threadline.\n\nSource: ${source}\nRuntime: ${runtime}\n\nFollow the Threadline registry entry for the active workflow.\n`;
+}
+
+/**
+ * Write a slash command routing table to ~/.codex/AGENTS.md.
+ * Each installed pack gets one or more /command entries so users can type
+ * `/handoff`, `/diagnose`, `/react-vite`, etc. instead of relying on $skill-name.
+ * Uses upsertManagedBlock so the section is idempotent and survives re-runs.
+ */
+export async function writeCodexSlashCommands(packs) {
+  const rows = [];
+  for (const pack of packs) {
+    const commands = pack.runtimes?.codex?.commands?.length ? pack.runtimes.codex.commands : [pack.id];
+    for (const command of commands) {
+      rows.push({ command, name: pack.name, triggers: (pack.triggers ?? []).slice(0, 3).join(', ') });
+    }
+  }
+  if (!rows.length) return null;
+
+  const maxCmd = Math.max(...rows.map((r) => r.command.length + 1)); // +1 for the leading /
+  const maxName = Math.max(...rows.map((r) => r.name.length));
+  const header = `| ${'Command'.padEnd(maxCmd)} | ${'Skill'.padEnd(maxName)} | Triggers |`;
+  const sep = `| ${'-'.repeat(maxCmd)} | ${'-'.repeat(maxName)} | -------- |`;
+  const tableRows = rows.map(
+    (r) => `| \`/${r.command}\`${' '.repeat(maxCmd - r.command.length - 1)} | ${r.name.padEnd(maxName)} | ${r.triggers || '—'} |`,
+  );
+
+  const block = [
+    '## Threadline Slash Commands',
+    '',
+    'Type `/command` to activate a Threadline skill. All commands below are installed and ready to use.',
+    '',
+    header,
+    sep,
+    ...tableRows,
+    '',
+    '> Commands are defined by Threadline. Re-run `threadline install` to refresh this list.',
+  ].join('\n');
+
+  return upsertManagedBlock('~/.codex/AGENTS.md', 'THREADLINE_SLASH_COMMANDS', block);
 }

@@ -1,3 +1,5 @@
+import * as p from '@clack/prompts';
+import chalk from 'chalk';
 import { detectProject } from './core/detect-project.mjs';
 import {
   executeHandoffCreate,
@@ -9,176 +11,529 @@ import {
 import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
-import { printPlan } from './utils/print.mjs';
 
-const HELP = `Threadline
-
-Usage:
-  threadline setup [--dry-run] [--merge|--adopt|--replace] [--runtimes claude,codex]
-  threadline init [--path <repo>] [--dry-run] [--local|--repo]
-  threadline detect [--path <repo>] [--json]
-  threadline skills list [--json]
-  threadline skills install [skill-id ...] [--all] [--replace] [--runtimes claude,codex]
-  threadline skills recommend [--path <repo>] [--json]
-  threadline index [--path <repo>]
-  threadline handoff create [--path <repo>] [--title <title>] [--summary <summary>] [--vault <path>]
-  threadline paths
-
-Defaults:
-  setup mode: --merge
-  init mode:  --local
-  runtimes:   claude,codex
-`;
-
-export async function main(argv) {
-  const [command = 'help', ...rest] = argv;
-  const flags = parseFlags(rest);
-
-  if (command === 'help' || flags.help) {
-    console.log(HELP);
-    return;
-  }
-
-  if (command === 'paths') {
-    console.log(JSON.stringify(getThreadlinePaths(), null, 2));
-    return;
-  }
-
-  if (command === 'detect') {
-    const profile = await detectProject(flags.path || process.cwd());
-    if (flags.json) console.log(JSON.stringify(profile, null, 2));
-    else printProject(profile);
-    return;
-  }
-
-  if (command === 'skills') {
-    const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'list';
-    const packIds = rest.filter((arg) => !arg.startsWith('--') && arg !== subcommand);
-    const registry = await readSkillRegistry();
-    if (subcommand === 'list') {
-      if (flags.json) console.log(JSON.stringify(registry.packs, null, 2));
-      else printSkills(registry.packs);
-      return;
-    }
-    if (subcommand === 'install') {
-      const runtimes = parseList(flags.runtimes || 'claude,codex');
-      const plan = await executeSkillInstall({
-        runtimes,
-        packIds,
-        all: Boolean(flags.all),
-        replace: Boolean(flags.replace),
-      });
-      printPlan(plan);
-      return;
-    }
-    if (subcommand === 'recommend') {
-      const profile = await detectProject(flags.path || process.cwd());
-      const skills = recommendSkillsForProfile(registry, profile);
-      if (flags.json) console.log(JSON.stringify({ profile, skills }, null, 2));
-      else printSkills(skills, `Recommended for ${profile.name}`);
-      return;
-    }
-    throw new Error(`Unknown skills command: ${subcommand}`);
-  }
-
-  if (command === 'setup') {
-    const mode = flags.replace ? 'replace' : flags.adopt ? 'adopt' : 'merge';
-    const runtimes = parseList(flags.runtimes || 'claude,codex');
-    if (mode === 'replace' && !flags.yes && !flags.dryRun) {
-      throw new Error('setup --replace requires --yes because it can overwrite Threadline-managed runtime files.');
-    }
-    const plan = flags.dryRun
-      ? createSetupPlan({ mode, runtimes, dryRun: true })
-      : await executeSetup({ mode, runtimes });
-    printPlan(plan);
-    return;
-  }
-
-  if (command === 'index') {
-    const profile = await detectProject(flags.path || process.cwd());
-    const plan = flags.dryRun
-      ? {
-          title: `RAG index: ${profile.name}`,
-          mode: 'manifest',
-          dryRun: true,
-          actions: [
-            { type: 'write', target: 'rag.config.json', description: 'Write RAG index policy' },
-            { type: 'write', target: 'rag/manifest.json', description: 'Write file manifest for retrieval backend' },
-          ],
-          notes: ['Dry run only.'],
-        }
-      : await executeRagIndex({ profile });
-    printPlan(plan);
-    return;
-  }
-
-  if (command === 'handoff') {
-    const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'create';
-    if (subcommand !== 'create') throw new Error(`Unknown handoff command: ${subcommand}`);
-    const profile = await detectProject(flags.path || process.cwd());
-    const plan = await executeHandoffCreate({
-      profile,
-      title: flags.title,
-      summary: flags.summary,
-      vault: flags.vault,
-    });
-    printPlan(plan);
-    return;
-  }
-
-  if (command === 'init') {
-    const profile = await detectProject(flags.path || process.cwd());
-    const mode = flags.repo ? 'repo' : 'local';
-    const plan = flags.dryRun
-      ? createProjectPlan({ profile, mode, dryRun: true })
-      : await executeProjectInit({ profile, mode });
-    printPlan(plan);
-    return;
-  }
-
-  throw new Error(`Unknown command: ${command}\n\n${HELP}`);
-}
+// ── tiny helpers ──────────────────────────────────────────────────────────────
 
 function parseFlags(args) {
   const flags = {};
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
     if (!arg.startsWith('--')) continue;
     const key = toCamel(arg.slice(2));
-    const next = args[index + 1];
-    if (!next || next.startsWith('--')) {
-      flags[key] = true;
-      continue;
-    }
+    const next = args[i + 1];
+    if (!next || next.startsWith('--')) { flags[key] = true; continue; }
     flags[key] = next;
-    index += 1;
+    i++;
   }
   return flags;
 }
 
 function parseList(value) {
-  return String(value)
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return String(value).split(',').map((s) => s.trim()).filter(Boolean);
 }
 
-function toCamel(value) {
-  return value.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+function toCamel(str) {
+  return str.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 }
 
-function printProject(profile) {
-  console.log(`Project: ${profile.name}`);
-  console.log(`ID:      ${profile.id}`);
-  console.log(`Root:    ${profile.root}`);
-  console.log(`Stacks:  ${profile.stacks.join(', ') || 'unknown'}`);
-  console.log(`Presets: ${profile.recommendedPresets.join(', ') || 'minimal'}`);
+/** Returns a chalk-coloured "N written, M up to date" summary from a results array. */
+function resultSummary(results = []) {
+  const written = results.filter((r) => r.changed).length;
+  const ok = results.filter((r) => !r.changed).length;
+  const parts = [];
+  if (written) parts.push(chalk.green(`${written} written`));
+  if (ok) parts.push(chalk.dim(`${ok} already up to date`));
+  return parts.join(', ') || chalk.dim('nothing to do');
 }
 
-function printSkills(skills, title = 'Skills') {
-  console.log(title);
-  for (const skill of skills) {
-    const source = skill.source?.repo ? ` (${skill.source.repo}:${skill.source.skill})` : '';
-    console.log(`- ${skill.id} [${skill.bucket}]${source}`);
+/** Exit cleanly if the user pressed Ctrl-C on any prompt. */
+function guardCancel(value, msg = 'Operation cancelled.') {
+  if (p.isCancel(value)) {
+    p.cancel(msg);
+    process.exit(0);
   }
+  return value;
+}
+
+// ── command handlers ──────────────────────────────────────────────────────────
+
+async function runSetup(flags) {
+  p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('setup')}`);
+
+  // ── runtimes ──
+  const runtimes = flags.runtimes
+    ? parseList(flags.runtimes)
+    : guardCancel(
+        await p.multiselect({
+          message: 'Which runtimes do you want to set up?',
+          options: [
+            { value: 'claude', label: 'Claude Code', hint: '~/.claude/' },
+            { value: 'codex', label: 'Codex', hint: '~/.codex/' },
+          ],
+          initialValues: ['claude', 'codex'],
+          required: true,
+        }),
+      );
+
+  // ── mode ──
+  let mode;
+  if (flags.replace) mode = 'replace';
+  else if (flags.adopt) mode = 'adopt';
+  else if (flags.merge) mode = 'merge';
+  else {
+    mode = guardCancel(
+      await p.select({
+        message: 'Install mode?',
+        options: [
+          { value: 'merge', label: 'Merge', hint: 'safe, additive — recommended' },
+          { value: 'adopt', label: 'Adopt', hint: 'inspect existing config, no writes' },
+          { value: 'replace', label: 'Replace', hint: 'overwrite Threadline-managed files' },
+        ],
+      }),
+    );
+  }
+
+  // ── replace guard ──
+  if (mode === 'replace' && !flags.yes) {
+    const confirmed = guardCancel(
+      await p.confirm({
+        message: `${chalk.yellow('⚠')}  Replace mode overwrites Threadline-managed runtime files. Continue?`,
+        initialValue: false,
+      }),
+    );
+    if (!confirmed) { p.cancel('Cancelled replace.'); process.exit(0); }
+  }
+
+  // ── dry run ──
+  if (flags.dryRun) {
+    const plan = createSetupPlan({ mode, runtimes, dryRun: true });
+    printPlanInteractive(plan);
+    p.outro(chalk.dim('Dry run — nothing written.'));
+    return;
+  }
+
+  // ── execute ──
+  const s = p.spinner();
+  s.start('Setting up runtimes…');
+  let plan;
+  try {
+    plan = await executeSetup({ mode, runtimes });
+    s.stop('Runtimes configured');
+  } catch (err) {
+    s.stop(chalk.red('Setup failed'));
+    p.log.error(err.message);
+    process.exitCode = 1;
+    return;
+  }
+
+  printResultsNote(plan.results, 'Setup results');
+  p.outro(`${chalk.green('✓')}  Setup complete`);
+}
+
+async function runSkillsInstall(flags, rest) {
+  p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('skills install')}`);
+
+  // ── runtimes ──
+  const runtimes = flags.runtimes
+    ? parseList(flags.runtimes)
+    : guardCancel(
+        await p.multiselect({
+          message: 'Install for which runtimes?',
+          options: [
+            { value: 'claude', label: 'Claude Code' },
+            { value: 'codex', label: 'Codex' },
+          ],
+          initialValues: ['claude'],
+          required: true,
+        }),
+      );
+
+  // ── all vs pick ──
+  let all = Boolean(flags.all);
+  let packIds = [];
+
+  if (!all) {
+    const scope = guardCancel(
+      await p.select({
+        message: 'Which skills do you want to install?',
+        options: [
+          { value: 'all', label: 'All skills', hint: 'installs every pack in the registry' },
+          { value: 'pick', label: 'Pick skills', hint: 'choose from the registry' },
+        ],
+      }),
+    );
+
+    if (scope === 'all') {
+      all = true;
+    } else {
+      const registry = await readSkillRegistry();
+      // Group by bucket for cleaner display
+      const byBucket = registry.packs.reduce((acc, pack) => {
+        (acc[pack.bucket] ??= []).push(pack);
+        return acc;
+      }, {});
+      const options = Object.entries(byBucket).flatMap(([bucket, packs]) =>
+        packs.map((pack) => ({
+          value: pack.id,
+          label: pack.name,
+          hint: `[${bucket}]${pack.source?.repo ? `  github:${pack.source.repo}` : '  local'}`,
+        })),
+      );
+      packIds = guardCancel(
+        await p.multiselect({
+          message: 'Select skill packs',
+          options,
+          required: true,
+        }),
+      );
+    }
+  }
+
+  // ── replace ──
+  const replace =
+    flags.replace !== undefined
+      ? Boolean(flags.replace)
+      : guardCancel(
+          await p.confirm({
+            message: 'Replace existing skill files?',
+            initialValue: false,
+          }),
+        );
+
+  // ── execute ──
+  const s = p.spinner();
+  s.start('Installing skill packs…');
+  let plan;
+  try {
+    plan = await executeSkillInstall({ runtimes, packIds, all, replace });
+    s.stop('Skills installed');
+  } catch (err) {
+    s.stop(chalk.red('Install failed'));
+    p.log.error(err.message);
+    process.exitCode = 1;
+    return;
+  }
+
+  printResultsNote(plan.results, 'Skill results');
+  p.outro(`${chalk.green('✓')}  ${plan.notes?.[0] ?? 'Done'}`);
+}
+
+async function runSkillsList() {
+  const registry = await readSkillRegistry();
+  const byBucket = registry.packs.reduce((acc, pack) => {
+    (acc[pack.bucket] ??= []).push(pack);
+    return acc;
+  }, {});
+
+  const lines = [];
+  for (const [bucket, packs] of Object.entries(byBucket)) {
+    lines.push(chalk.bold(`[${bucket}]`));
+    for (const pack of packs) {
+      const src = pack.source?.repo
+        ? chalk.dim(`  ·  github:${pack.source.repo}`)
+        : chalk.dim('  ·  local');
+      lines.push(`  ${chalk.cyan(pack.id)}${src}`);
+    }
+    lines.push('');
+  }
+
+  p.note(lines.join('\n').trimEnd(), `Skill Registry  ${chalk.dim(`(${registry.packs.length} packs)`)}`);
+}
+
+async function runSkillsRecommend(flags) {
+  const s = p.spinner();
+  s.start('Detecting project…');
+  const profile = await detectProject(flags.path || process.cwd());
+  s.stop(`Project: ${chalk.bold(profile.name)}`);
+
+  const registry = await readSkillRegistry();
+  const skills = recommendSkillsForProfile(registry, profile);
+
+  const lines = skills.map(
+    (sk) =>
+      `  ${chalk.cyan(sk.id.padEnd(32))} ${chalk.dim(`[${sk.bucket}]`)}`,
+  );
+  p.note(lines.join('\n'), `Recommended for ${chalk.bold(profile.name)}`);
+}
+
+async function runSkills(subcommand, flags, rest) {
+  if (subcommand === 'list') { await runSkillsList(); return; }
+  if (subcommand === 'recommend') { await runSkillsRecommend(flags); return; }
+  if (subcommand === 'install') { await runSkillsInstall(flags, rest); return; }
+  p.log.error(`Unknown skills subcommand: ${chalk.bold(subcommand)}`);
+  process.exitCode = 1;
+}
+
+async function runDetect(flags) {
+  const s = p.spinner();
+  s.start('Detecting project…');
+  const profile = await detectProject(flags.path || process.cwd());
+  s.stop('Project detected');
+
+  if (flags.json) {
+    console.log(JSON.stringify(profile, null, 2));
+    return;
+  }
+
+  p.note(
+    [
+      `${chalk.dim('name'.padEnd(12))} ${chalk.bold(profile.name)}`,
+      `${chalk.dim('id'.padEnd(12))} ${profile.id}`,
+      `${chalk.dim('root'.padEnd(12))} ${profile.root}`,
+      `${chalk.dim('stacks'.padEnd(12))} ${profile.stacks.join(', ') || chalk.dim('none detected')}`,
+      `${chalk.dim('presets'.padEnd(12))} ${profile.recommendedPresets.join(', ')}`,
+      `${chalk.dim('pkg mgr'.padEnd(12))} ${profile.packageManager}`,
+    ].join('\n'),
+    'Project Profile',
+  );
+}
+
+async function runInit(flags) {
+  p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('init')}`);
+
+  const s = p.spinner();
+  s.start('Detecting project…');
+  const profile = await detectProject(flags.path || process.cwd());
+  s.stop(`Detected ${chalk.bold(profile.name)}`);
+
+  p.log.info(
+    `Stacks: ${profile.stacks.length ? chalk.cyan(profile.stacks.join(', ')) : chalk.dim('unknown')}`,
+  );
+
+  let mode;
+  if (flags.repo) mode = 'repo';
+  else if (flags.local) mode = 'local';
+  else {
+    mode = guardCancel(
+      await p.select({
+        message: 'Where should project state be written?',
+        options: [
+          { value: 'local', label: 'Local  (XDG)', hint: '~/.local/share/threadline/ — no git changes' },
+          { value: 'repo', label: 'Repo', hint: 'writes files into the project — git-visible' },
+        ],
+      }),
+    );
+  }
+
+  if (flags.dryRun) {
+    const plan = createProjectPlan({ profile, mode, dryRun: true });
+    printPlanInteractive(plan);
+    p.outro(chalk.dim('Dry run — nothing written.'));
+    return;
+  }
+
+  const s2 = p.spinner();
+  s2.start('Initialising project…');
+  let plan;
+  try {
+    plan = await executeProjectInit({ profile, mode });
+    s2.stop('Project initialised');
+  } catch (err) {
+    s2.stop(chalk.red('Init failed'));
+    p.log.error(err.message);
+    process.exitCode = 1;
+    return;
+  }
+
+  printResultsNote(plan.results, 'Written files');
+  p.outro(`${chalk.green('✓')}  Project ready`);
+}
+
+async function runIndex(flags) {
+  p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('index')}`);
+
+  const s = p.spinner();
+  s.start('Detecting project…');
+  const profile = await detectProject(flags.path || process.cwd());
+  s.stop(`Project: ${chalk.bold(profile.name)}`);
+
+  if (flags.dryRun) {
+    p.note('rag.config.json\nrag/manifest.json', 'Would write');
+    p.outro(chalk.dim('Dry run — nothing written.'));
+    return;
+  }
+
+  const s2 = p.spinner();
+  s2.start('Building RAG index…');
+  let plan;
+  try {
+    plan = await executeRagIndex({ profile });
+    s2.stop('RAG index built');
+  } catch (err) {
+    s2.stop(chalk.red('Index failed'));
+    p.log.error(err.message);
+    process.exitCode = 1;
+    return;
+  }
+
+  printResultsNote(plan.results, 'Index files');
+  p.outro(`${chalk.green('✓')}  Index complete`);
+}
+
+async function runHandoffCreate(flags) {
+  p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('handoff create')}`);
+
+  const s = p.spinner();
+  s.start('Detecting project…');
+  const profile = await detectProject(flags.path || process.cwd());
+  s.stop(`Project: ${chalk.bold(profile.name)}`);
+
+  const title =
+    flags.title ??
+    guardCancel(
+      await p.text({
+        message: 'Handoff title',
+        placeholder: 'e.g. auth-refactor or feat/payments',
+        validate: (v) => (v.trim() ? undefined : 'Title is required'),
+      }),
+    );
+
+  const summary =
+    flags.summary ??
+    guardCancel(
+      await p.text({
+        message: 'Summary',
+        placeholder: 'Short description of what you are handing off (optional)',
+      }),
+    );
+
+  const s2 = p.spinner();
+  s2.start('Writing handoff…');
+  let plan;
+  try {
+    plan = await executeHandoffCreate({
+      profile,
+      title: title || undefined,
+      summary: summary || undefined,
+      vault: flags.vault,
+    });
+    s2.stop('Handoff created');
+  } catch (err) {
+    s2.stop(chalk.red('Handoff failed'));
+    p.log.error(err.message);
+    process.exitCode = 1;
+    return;
+  }
+
+  const resumeId = plan.notes?.find((n) => n.startsWith('Resume ID:'))?.replace('Resume ID: ', '');
+  const handoffFile = plan.results?.[0]?.target;
+
+  p.note(
+    [
+      resumeId ? `${chalk.dim('resume ID')}   ${chalk.bold.cyan(resumeId)}` : null,
+      handoffFile ? `${chalk.dim('file')}        ${handoffFile}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+    'Handoff created',
+  );
+
+  if (resumeId) {
+    p.outro(`${chalk.green('✓')}  Resume with: ${chalk.cyan(`/resume ${resumeId}`)}`);
+  } else {
+    p.outro(`${chalk.green('✓')}  Done`);
+  }
+}
+
+async function runHandoff(subcommand, flags) {
+  if (subcommand === 'create') { await runHandoffCreate(flags); return; }
+  p.log.error(`Unknown handoff subcommand: ${chalk.bold(subcommand)}`);
+  process.exitCode = 1;
+}
+
+// ── display helpers ───────────────────────────────────────────────────────────
+
+/** Show a p.note box with changed/ok lines + summary title. */
+function printResultsNote(results = [], title = 'Results') {
+  if (!results.length) return;
+  const changed = results.filter((r) => r.changed);
+  const unchanged = results.filter((r) => !r.changed).length;
+  const lines = changed.map((r) => `${chalk.green('✓')}  ${r.target}`);
+  if (unchanged > 0) lines.push(chalk.dim(`   …${unchanged} already up to date`));
+  p.note(lines.join('\n'), `${title}  ·  ${resultSummary(results)}`);
+}
+
+/** Render a dry-run plan the same way printPlan does but with chalk. */
+function printPlanInteractive(plan) {
+  p.note(
+    plan.actions
+      .map((a) => `${a.type === 'write' ? chalk.cyan('WRITE') : chalk.dim('OK   ')}  ${a.target}\n       ${chalk.dim(a.description)}`)
+      .join('\n'),
+    `${plan.title}  ${chalk.dim('(dry run)')}`,
+  );
+  if (plan.notes?.length) {
+    for (const note of plan.notes) p.log.info(note);
+  }
+}
+
+function printHelp() {
+  console.log(`
+${chalk.bold('Threadline')} ${chalk.dim('— portable agent runtime manager')}
+
+${chalk.bold('Usage')}
+  ${chalk.cyan('threadline setup')}     ${chalk.dim('[--merge|--adopt|--replace] [--runtimes claude,codex] [--yes] [--dry-run]')}
+  ${chalk.cyan('threadline init')}      ${chalk.dim('[--path <dir>] [--local|--repo] [--dry-run]')}
+  ${chalk.cyan('threadline detect')}    ${chalk.dim('[--path <dir>] [--json]')}
+  ${chalk.cyan('threadline skills')}    ${chalk.dim('list')}
+  ${chalk.cyan('threadline skills')}    ${chalk.dim('install  [--all] [--replace] [--runtimes claude,codex] [pack-id ...]')}
+  ${chalk.cyan('threadline skills')}    ${chalk.dim('recommend  [--path <dir>]')}
+  ${chalk.cyan('threadline index')}     ${chalk.dim('[--path <dir>] [--dry-run]')}
+  ${chalk.cyan('threadline handoff')}   ${chalk.dim('create  [--title <t>] [--summary <s>] [--vault <path>]')}
+  ${chalk.cyan('threadline paths')}
+
+${chalk.bold('Flags')}
+  ${chalk.dim('--dry-run')}    Preview what would be written
+  ${chalk.dim('--json')}       Machine-readable output (also disables interactive mode)
+  ${chalk.dim('--yes')}        Skip confirmations
+
+${chalk.bold('Pipe / CI')}
+  ${chalk.dim('Add --json or pipe stdout to force the plain output mode.')}
+`);
+}
+
+// ── entry point ───────────────────────────────────────────────────────────────
+
+export async function main(argv) {
+  const [command = 'help', ...rest] = argv;
+  const flags = parseFlags(rest);
+
+  // --json always delegates to plain CLI (machine-readable, pipe-safe)
+  if (flags.json) {
+    const { main: plainMain } = await import('./cli-plain.mjs');
+    return plainMain(argv);
+  }
+
+  if (command === 'help' || flags.help) { printHelp(); return; }
+
+  if (command === 'paths') {
+    const paths = getThreadlinePaths();
+    p.note(
+      Object.entries(paths)
+        .map(([k, v]) => `${chalk.dim(k.padEnd(14))} ${v}`)
+        .join('\n'),
+      'Threadline Paths',
+    );
+    return;
+  }
+
+  if (command === 'detect')  { await runDetect(flags); return; }
+  if (command === 'setup')   { await runSetup(flags); return; }
+  if (command === 'init')    { await runInit(flags); return; }
+  if (command === 'index')   { await runIndex(flags); return; }
+
+  if (command === 'skills') {
+    const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'list';
+    await runSkills(subcommand, flags, rest);
+    return;
+  }
+
+  if (command === 'handoff') {
+    const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'create';
+    await runHandoff(subcommand, flags);
+    return;
+  }
+
+  p.log.error(`Unknown command: ${chalk.bold(command)}`);
+  printHelp();
+  process.exitCode = 1;
 }

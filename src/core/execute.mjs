@@ -1,9 +1,10 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { createProjectPlan, createSetupPlan } from './plan.mjs';
 import { getThreadlinePaths } from './paths.mjs';
 import { readTemplate, renderTemplate, repoRoot } from './templates.mjs';
-import { executeSkillInstall as runSkillInstall } from './skill-install.mjs';
+import { executeSkillInstall as runSkillInstall, writeCodexSlashCommands } from './skill-install.mjs';
 import {
   copyDir,
   fileExists,
@@ -11,6 +12,7 @@ import {
   expandHome,
   listFilesRecursive,
   readJsonArrayIfExists,
+  readJsonIfExists,
   readTextIfExists,
   upsertManagedBlock,
   writeJsonIfChanged,
@@ -151,12 +153,22 @@ async function installCodex({ replace = false } = {}) {
   const managed = await readTemplate('templates/codex/config.managed.toml');
   if (replace) {
     results.push(await writeTextIfChanged('~/.codex/config.toml', managed.trimEnd() + '\n'));
-    return results;
+  } else {
+    const body = managed
+      .replace('# BEGIN THREADLINE_MANAGED\n', '')
+      .replace('\n# END THREADLINE_MANAGED', '');
+    results.push(await upsertManagedBlock('~/.codex/config.toml', 'THREADLINE_MANAGED', body));
   }
-  const body = managed
-    .replace('# BEGIN THREADLINE_MANAGED\n', '')
-    .replace('\n# END THREADLINE_MANAGED', '');
-  results.push(await upsertManagedBlock('~/.codex/config.toml', 'THREADLINE_MANAGED', body));
+  // Write core slash commands to AGENTS.md (installSkillBundle will overwrite with
+  // the full set when running setup --replace or threadline install --all).
+  const corePack = {
+    id: 'threadline-core',
+    name: 'Threadline Core',
+    triggers: ['always'],
+    runtimes: { codex: { commands: ['handoff', 'resume', 'context', 'learnings'] } },
+  };
+  const agentsResult = await writeCodexSlashCommands([corePack]);
+  if (agentsResult) results.push(agentsResult);
   return results;
 }
 
@@ -273,6 +285,82 @@ export async function executeHandoffCreate({ profile, title, summary, vault }) {
     notes: [`Resume ID: ${handoffId}`],
     results,
   };
+}
+
+/** Return all handoff index entries across every project/workspace, newest first. */
+export async function executeHandoffList() {
+  const paths = getThreadlinePaths();
+  const projectsDir = paths.projectsDir;
+  const entries = [];
+
+  let projectIds;
+  try {
+    projectIds = (await fs.readdir(projectsDir, { withFileTypes: true }))
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return [];
+  }
+
+  for (const projectId of projectIds) {
+    const workspacesDir = path.join(projectsDir, projectId, 'workspaces');
+    let workspaceIds;
+    try {
+      workspaceIds = (await fs.readdir(workspacesDir, { withFileTypes: true }))
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
+    } catch {
+      continue;
+    }
+    for (const workspaceId of workspaceIds) {
+      const indexPath = path.join(workspacesDir, workspaceId, 'handoffs', 'index.json');
+      const batch = await readJsonArrayIfExists(indexPath);
+      entries.push(...batch);
+    }
+  }
+
+  return entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/**
+ * Resolve a handoff by full or prefix ID match.
+ * Returns { found, id, title, projectId, createdAt, root, summary, sections, markdownPath }
+ */
+export async function executeHandoffResume({ id }) {
+  const all = await executeHandoffList();
+  const entry = all.find((e) => e.id === id || e.id.startsWith(id));
+  if (!entry) return { found: false, id };
+
+  // The JSON detail file lives next to the markdown (.md → .json)
+  const jsonPath = entry.path.replace(/\.md$/, '.json');
+  const full = await readJsonIfExists(jsonPath) ?? entry;
+  const markdown = await readTextIfExists(entry.path);
+  const sections = markdown ? parseHandoffSections(markdown) : {};
+
+  return {
+    found: true,
+    id: entry.id,
+    title: entry.title,
+    projectId: entry.projectId,
+    createdAt: entry.createdAt,
+    root: full.root ?? null,
+    summary: full.summary ?? sections.summary ?? 'No summary recorded.',
+    sections,
+    markdownPath: entry.path,
+  };
+}
+
+/** Extract ## Section content from a handoff markdown string. */
+function parseHandoffSections(markdown) {
+  const sections = {};
+  const parts = markdown.split(/^## /m);
+  for (const part of parts.slice(1)) {
+    const nl = part.indexOf('\n');
+    if (nl === -1) continue;
+    const key = part.slice(0, nl).trim().toLowerCase().replace(/\s+/g, '_');
+    sections[key] = part.slice(nl + 1).trim();
+  }
+  return sections;
 }
 
 function getProjectDir(profile) {

@@ -1,5 +1,5 @@
 {
-  "name": "relaykit-example-fullstack-js",
+  "name": "threadline-example-fullstack-js",
   "private": true,
   "scripts": {
     "dev": "vite --host",

@@ -1,6 +1,6 @@
 # Runtime Adapters
 
-RelayKit supports multiple agent runtimes through adapters.
+Threadline supports multiple agent runtimes through adapters.
 
 ## Claude Code
 

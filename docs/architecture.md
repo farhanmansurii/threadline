@@ -1,6 +1,6 @@
 # Architecture
 
-RelayKit has four layers:
+Threadline has four layers:
 
 ```text
 Core
@@ -18,8 +18,8 @@ Skills
 
 ## Design Principles
 
-- User config lives in `~/.config/relaykit`.
-- Generated project state lives in `~/.local/share/relaykit`.
+- User config lives in `~/.config/threadline`.
+- Generated project state lives in `~/.local/share/threadline`.
 - Target repos stay untouched unless `--repo` is passed.
 - Runtime adapters implement the same profile instead of each tool inventing its own truth.
 - Skill expansion uses a registry and profiles, not a giant always-loaded bundle.
@@ -27,7 +27,7 @@ Skills
 
 ## Project Identity
 
-RelayKit identifies projects by:
+Threadline identifies projects by:
 
 1. Git remote URL when available.
 2. Git root path when no remote exists.
@@ -52,7 +52,7 @@ The ID is a stable 12-character hash. This lets the same repo resolve to the sam
 ## Local-First Project State
 
 ```text
-~/.local/share/relaykit/projects/<project-id>/
+~/.local/share/threadline/projects/<project-id>/
 ├── project-profile.json
 ├── generated/
 │   ├── AGENTS.generated.md

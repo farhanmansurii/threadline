@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://relaykit.dev/schemas/skill-pack.schema.json",
-  "title": "RelayKit Skill Pack",
+  "$id": "https://threadline.dev/schemas/skill-pack.schema.json",
+  "title": "Threadline Skill Pack",
   "type": "object",
   "required": ["id", "name", "bucket", "triggers", "runtimes"],
   "properties": {

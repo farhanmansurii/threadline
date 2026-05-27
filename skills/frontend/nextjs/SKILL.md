@@ -1,6 +1,6 @@
 ---
 name: nextjs
-description: Next.js project workflow for RelayKit-detected apps.
+description: Next.js project workflow for Threadline-detected apps.
 ---
 
 # Next.js

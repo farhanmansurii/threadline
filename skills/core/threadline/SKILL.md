@@ -1,16 +1,16 @@
 ---
-name: relaykit
-description: Use RelayKit to detect project context, route handoffs, manage runtime setup, and keep agent configuration portable across Claude Code, Codex, Cursor, OpenCode, Kimi, RAG, and Obsidian.
+name: threadline
+description: Use Threadline to detect project context, route handoffs, manage runtime setup, and keep agent configuration portable across Claude Code, Codex, Cursor, OpenCode, Kimi, RAG, and Obsidian.
 ---
 
-# RelayKit
+# Threadline
 
 Use this skill when a user asks to:
 
 - set up or sync Claude Code/Codex/Cursor/OpenCode runtime config
 - detect project stack and recommend skills
 - create or resume a handoff
-- inspect RelayKit project context
+- inspect Threadline project context
 - manage auto-learning approval boundaries
 - configure RAG/Obsidian integration
 

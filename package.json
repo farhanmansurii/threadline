@@ -1,14 +1,14 @@
 {
-  "name": "relaykit",
+  "name": "threadline",
   "version": "0.1.0",
   "description": "Portable agent environment manager for Claude Code, Codex, Cursor, OpenCode, Kimi, RAG, Obsidian handoffs, and project-aware workflows.",
   "type": "module",
   "bin": {
-    "relaykit": "./bin/relaykit"
+    "threadline": "./bin/threadline"
   },
   "scripts": {
-    "check": "node --check bin/relaykit && node --check src/cli.mjs && node --check src/core/detect-project.mjs && node --check src/core/paths.mjs && node --check src/core/plan.mjs",
-    "smoke": "node bin/relaykit detect --path examples/fullstack-js --json && node bin/relaykit setup --dry-run --runtimes claude,codex && node bin/relaykit init --path examples/fullstack-js --dry-run"
+    "check": "node --check bin/threadline && node --check src/cli.mjs && node --check src/core/detect-project.mjs && node --check src/core/paths.mjs && node --check src/core/plan.mjs",
+    "smoke": "node bin/threadline detect --path examples/fullstack-js --json && node bin/threadline setup --dry-run --runtimes claude,codex && node bin/threadline init --path examples/fullstack-js --dry-run"
   },
   "keywords": [
     "claude-code",

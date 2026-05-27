@@ -1,8 +1,8 @@
-# RelayKit
+# Threadline
 
 Portable agent environment manager for Claude Code, Codex, Cursor, OpenCode, Kimi, RAG, Obsidian handoffs, and project-aware workflows.
 
-RelayKit is the layer between your machine, your repos, and your AI coding tools. It installs a small shared agent runtime, detects each project dynamically, keeps project state outside git by default, and lets agents resume work through stable handoff IDs.
+Threadline is the layer between your machine, your repos, and your AI coding tools. It installs a small shared agent runtime, detects each project dynamically, keeps project state outside git by default, and lets agents resume work through stable handoff IDs.
 
 ## What It Solves
 
@@ -15,21 +15,21 @@ RelayKit is the layer between your machine, your repos, and your AI coding tools
 ## Install Shape
 
 ```bash
-npx relaykit setup --dry-run
-npx relaykit setup --merge --runtimes claude,codex
+npx threadline setup --dry-run
+npx threadline setup --merge --runtimes claude,codex
 ```
 
 Inside a project:
 
 ```bash
-npx relaykit init --dry-run
-npx relaykit init --local
+npx threadline init --dry-run
+npx threadline init --local
 ```
 
 `--local` writes project profile state outside the repo:
 
 ```text
-~/.local/share/relaykit/projects/<project-id>/
+~/.local/share/threadline/projects/<project-id>/
 ```
 
 `--repo` materializes files into the target repo and is intentionally git-visible.
@@ -37,14 +37,14 @@ npx relaykit init --local
 ## XDG Layout
 
 ```text
-~/.config/relaykit/       # human-editable config, dotfiles-friendly
-~/.local/share/relaykit/  # generated state, project profiles, handoffs, indexes
-~/.cache/relaykit/        # temporary/cache data
+~/.config/threadline/       # human-editable config, dotfiles-friendly
+~/.local/share/threadline/  # generated state, project profiles, handoffs, indexes
+~/.cache/threadline/        # temporary/cache data
 ```
 
 ## Runtime Model
 
-RelayKit treats tools as adapters:
+Threadline treats tools as adapters:
 
 | Runtime | Adapter Responsibility |
 | --- | --- |
@@ -56,11 +56,11 @@ RelayKit treats tools as adapters:
 
 ## Safety Model
 
-RelayKit never needs to hard overwrite your setup to become useful.
+Threadline never needs to hard overwrite your setup to become useful.
 
 ```text
 setup --merge    # default, additive managed sections
-setup --adopt    # bring existing compatible config under RelayKit tracking
+setup --adopt    # bring existing compatible config under Threadline tracking
 setup --replace  # explicit reset with backup
 ```
 

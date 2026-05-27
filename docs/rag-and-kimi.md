@@ -1,13 +1,13 @@
 # RAG and Kimi
 
-RelayKit separates human-readable knowledge from generated retrieval indexes.
+Threadline separates human-readable knowledge from generated retrieval indexes.
 
 ## LightRAG
 
 Use LightRAG or another configured RAG backend for project retrieval. Store generated indexes under:
 
 ```text
-~/.local/share/relaykit/projects/<project-id>/rag/
+~/.local/share/threadline/projects/<project-id>/rag/
 ```
 
 Index source policy is project-specific and generated from detection:
@@ -36,10 +36,10 @@ Kimi can be used as a documentation generator, not as the canonical store.
 Recommended flow:
 
 ```text
-1. RelayKit detects project/folder.
+1. Threadline detects project/folder.
 2. Kimi generates one-time knowledge docs.
 3. Docs are written to Obsidian or local project state.
-4. RelayKit indexes the curated docs.
+4. Threadline indexes the curated docs.
 5. Agents retrieve by project, feature, folder, and handoff ID.
 ```
 

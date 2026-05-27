@@ -2,19 +2,19 @@
   "version": 1,
   "packs": [
     {
-      "id": "relaykit-core",
-      "name": "RelayKit Core",
+      "id": "threadline-core",
+      "name": "Threadline Core",
       "bucket": "core",
       "triggers": ["always"],
       "requires": [],
       "optional": [],
       "runtimes": {
         "claude": {
-          "skills": ["skills/core/relaykit"],
+          "skills": ["skills/core/threadline"],
           "commands": ["handoff", "resume", "context", "learnings"]
         },
         "codex": {
-          "skills": ["skills/core/relaykit"]
+          "skills": ["skills/core/threadline"]
         }
       }
     },

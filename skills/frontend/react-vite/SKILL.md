@@ -1,6 +1,6 @@
 ---
 name: react-vite
-description: React + Vite project workflow for RelayKit-detected frontend repos.
+description: React + Vite project workflow for Threadline-detected frontend repos.
 ---
 
 # React Vite

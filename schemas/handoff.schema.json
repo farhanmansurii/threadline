@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://relaykit.dev/schemas/handoff.schema.json",
-  "title": "RelayKit Handoff",
+  "$id": "https://threadline.dev/schemas/handoff.schema.json",
+  "title": "Threadline Handoff",
   "type": "object",
   "required": ["id", "projectId", "createdAt", "summary", "nextActions"],
   "properties": {

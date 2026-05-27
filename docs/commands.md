@@ -1,14 +1,14 @@
 # Commands
 
-## `relaykit setup`
+## `threadline setup`
 
 Installs or syncs user-level runtime setup.
 
 ```bash
-relaykit setup --dry-run
-relaykit setup --merge --runtimes claude,codex
-relaykit setup --adopt
-relaykit setup --replace
+threadline setup --dry-run
+threadline setup --merge --runtimes claude,codex
+threadline setup --adopt
+threadline setup --replace
 ```
 
 Modes:
@@ -16,17 +16,17 @@ Modes:
 | Mode | Behavior |
 | --- | --- |
 | `merge` | Add missing managed sections and preserve existing config |
-| `adopt` | Bring compatible existing setup under RelayKit tracking after review |
-| `replace` | Replace RelayKit-managed sections after backup and approval |
+| `adopt` | Bring compatible existing setup under Threadline tracking after review |
+| `replace` | Replace Threadline-managed sections after backup and approval |
 
-## `relaykit init`
+## `threadline init`
 
 Detects the current project and generates a project profile.
 
 ```bash
-relaykit init --dry-run
-relaykit init --local
-relaykit init --repo
+threadline init --dry-run
+threadline init --local
+threadline init --repo
 ```
 
 Modes:
@@ -36,24 +36,24 @@ Modes:
 | `local` | Store profile outside repo under XDG state |
 | `repo` | Materialize profile/instructions into the repo |
 
-## `relaykit detect`
+## `threadline detect`
 
 Prints project detection output.
 
 ```bash
-relaykit detect
-relaykit detect --json
-relaykit detect --path /path/to/repo
+threadline detect
+threadline detect --json
+threadline detect --path /path/to/repo
 ```
 
 ## Planned Commands
 
 ```bash
-relaykit skills list
-relaykit skills recommend
-relaykit handoff create
-relaykit resume <handoff-id>
-relaykit context <query>
-relaykit index
-relaykit learnings
+threadline skills list
+threadline skills recommend
+threadline handoff create
+threadline resume <handoff-id>
+threadline context <query>
+threadline index
+threadline learnings
 ```

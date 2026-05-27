@@ -1,6 +1,6 @@
 # Resume
 
-Resume from a RelayKit handoff ID.
+Resume from a Threadline handoff ID.
 
 Expected behavior:
 

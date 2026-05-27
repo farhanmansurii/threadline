@@ -1,6 +1,6 @@
 # Handoff
 
-Create a RelayKit handoff for the current session.
+Create a Threadline handoff for the current session.
 
 Expected behavior:
 

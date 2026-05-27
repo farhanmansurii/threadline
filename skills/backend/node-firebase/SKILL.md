@@ -1,6 +1,6 @@
 ---
 name: node-firebase
-description: Firebase and Node backend workflow for RelayKit-detected repos.
+description: Firebase and Node backend workflow for Threadline-detected repos.
 ---
 
 # Node Firebase

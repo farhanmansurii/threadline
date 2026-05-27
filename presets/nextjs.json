@@ -1,7 +1,7 @@
 {
   "id": "nextjs",
   "name": "Next.js",
-  "skills": ["relaykit-core", "nextjs", "playwright-ui"],
+  "skills": ["threadline-core", "nextjs", "playwright-ui"],
   "mcp": ["context7", "memory", "playwright"],
   "runtimes": ["claude", "codex"]
 }

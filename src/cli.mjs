@@ -1,15 +1,15 @@
 import { detectProject } from './core/detect-project.mjs';
-import { getRelayKitPaths } from './core/paths.mjs';
+import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { printPlan } from './utils/print.mjs';
 
-const HELP = `RelayKit
+const HELP = `Threadline
 
 Usage:
-  relaykit setup [--dry-run] [--merge|--adopt|--replace] [--runtimes claude,codex]
-  relaykit init [--path <repo>] [--dry-run] [--local|--repo]
-  relaykit detect [--path <repo>] [--json]
-  relaykit paths
+  threadline setup [--dry-run] [--merge|--adopt|--replace] [--runtimes claude,codex]
+  threadline init [--path <repo>] [--dry-run] [--local|--repo]
+  threadline detect [--path <repo>] [--json]
+  threadline paths
 
 Defaults:
   setup mode: --merge
@@ -27,7 +27,7 @@ export async function main(argv) {
   }
 
   if (command === 'paths') {
-    console.log(JSON.stringify(getRelayKitPaths(), null, 2));
+    console.log(JSON.stringify(getThreadlinePaths(), null, 2));
     return;
   }
 

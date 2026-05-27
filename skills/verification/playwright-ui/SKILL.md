@@ -1,6 +1,6 @@
 ---
 name: playwright-ui
-description: Browser verification workflow for RelayKit-detected Playwright/UI projects.
+description: Browser verification workflow for Threadline-detected Playwright/UI projects.
 ---
 
 # Playwright UI

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://relaykit.dev/schemas/project-profile.schema.json",
-  "title": "RelayKit Project Profile",
+  "$id": "https://threadline.dev/schemas/project-profile.schema.json",
+  "title": "Threadline Project Profile",
   "type": "object",
   "required": ["id", "name", "root", "stacks", "recommendedPresets"],
   "properties": {

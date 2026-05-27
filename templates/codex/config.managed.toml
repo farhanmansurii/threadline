@@ -1,4 +1,4 @@
-# BEGIN RELAYKIT_MANAGED
+# BEGIN THREADLINE_MANAGED
 [features]
 multi_agent = true
 
@@ -9,4 +9,4 @@ args = ["-y", "@upstash/context7-mcp"]
 [mcp_servers.playwright]
 command = "npx"
 args = ["-y", "@playwright/mcp@latest"]
-# END RELAYKIT_MANAGED
+# END THREADLINE_MANAGED

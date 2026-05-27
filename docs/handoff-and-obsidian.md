@@ -1,12 +1,12 @@
 # Handoff and Obsidian
 
-RelayKit uses Obsidian as an optional human-readable knowledge and handoff layer.
+Threadline uses Obsidian as an optional human-readable knowledge and handoff layer.
 
 ## Vault Layout
 
 ```text
 Obsidian Vault/
-└── RelayKit/
+└── Threadline/
     ├── Projects/
     │   └── <project-slug>/
     │       ├── Overview.md
@@ -24,8 +24,8 @@ Obsidian Vault/
 Claude Code can expose `/handoff` through a slash command. Codex, Cursor, OpenCode, and Kimi use explicit CLI commands.
 
 ```bash
-relaykit handoff create
-relaykit resume rms-dashboard-2026-05-27-a7f3
+threadline handoff create
+threadline resume rms-dashboard-2026-05-27-a7f3
 ```
 
 The handoff writer should capture:

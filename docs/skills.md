@@ -1,12 +1,12 @@
 # Skills
 
-RelayKit uses skill packs rather than one large always-loaded setup.
+Threadline uses skill packs rather than one large always-loaded setup.
 
 ## Buckets
 
 | Bucket | Meaning |
 | --- | --- |
-| `core` | Always installed because RelayKit needs it |
+| `core` | Always installed because Threadline needs it |
 | `detected` | Recommended when project evidence matches |
 | `library` | Available on demand but not default loaded |
 

@@ -101,7 +101,7 @@ async function preflightSetup({ runtimes }) {
   }
 }
 
-export async function executeProjectInit({ profile, mode }) {
+export async function executeProjectInit({ profile, mode, lsp = true }) {
   if (mode !== 'local') {
     throw new Error('init --repo is not implemented yet. Use --local.');
   }
@@ -125,10 +125,149 @@ export async function executeProjectInit({ profile, mode }) {
     await writeJsonIfChanged(path.join(projectDir, 'handoff.config.json'), createHandoffConfig(profile)),
   ];
 
+  // Write LSP / editor config into the project root
+  if (lsp) {
+    const lspResults = await executeLspInit({ profile });
+    results.push(...lspResults.results);
+  }
+
   return {
     ...createProjectPlan({ profile, mode, dryRun: false }),
     results,
   };
+}
+
+/**
+ * Write .vscode/extensions.json and .vscode/settings.json for the detected stacks.
+ * Uses writeTextIfMissing — never overwrites existing editor config.
+ */
+export async function executeLspInit({ profile }) {
+  const vscodeDir = path.join(profile.root, '.vscode');
+  await ensureDir(vscodeDir);
+
+  const extensions = buildExtensions(profile.stacks);
+  const settings = buildVscodeSettings(profile.stacks);
+
+  const results = [];
+
+  if (extensions.recommendations.length) {
+    results.push(
+      await writeTextIfMissing(
+        path.join(vscodeDir, 'extensions.json'),
+        `${JSON.stringify(extensions, null, 2)}\n`,
+      ),
+    );
+  }
+
+  if (Object.keys(settings).length) {
+    results.push(
+      await writeTextIfMissing(
+        path.join(vscodeDir, 'settings.json'),
+        `${JSON.stringify(settings, null, 2)}\n`,
+      ),
+    );
+  }
+
+  return {
+    title: 'LSP config',
+    results,
+  };
+}
+
+/** Map detected stacks → VS Code extension IDs. */
+function buildExtensions(stacks) {
+  const recs = new Set();
+
+  if (stacks.includes('typescript') || stacks.includes('node')) {
+    recs.add('dbaeumer.vscode-eslint');
+    recs.add('esbenp.prettier-vscode');
+    recs.add('ms-vscode.vscode-typescript-next');
+    recs.add('yoavbls.pretty-ts-errors');
+  }
+  if (stacks.includes('react') || stacks.includes('nextjs')) {
+    recs.add('dsznajder.es7-react-js-snippets');
+  }
+  if (stacks.includes('nextjs') || stacks.includes('vite')) {
+    // Tailwind is common in these stacks
+    recs.add('bradlc.vscode-tailwindcss');
+  }
+  if (stacks.includes('python')) {
+    recs.add('ms-python.python');
+    recs.add('ms-python.debugpy');
+    recs.add('charliermarsh.ruff');
+    recs.add('ms-python.black-formatter');
+  }
+  if (stacks.includes('go')) {
+    recs.add('golang.go');
+    recs.add('premparihar.gotestexplorer');
+  }
+  if (stacks.includes('rust')) {
+    recs.add('rust-lang.rust-analyzer');
+    recs.add('tamasfe.even-better-toml');
+    recs.add('vadimcn.vscode-lldb');
+  }
+  if (stacks.includes('playwright')) {
+    recs.add('ms-playwright.playwright');
+  }
+  if (stacks.includes('firebase')) {
+    recs.add('toba.vsfire');
+  }
+
+  return { recommendations: [...recs] };
+}
+
+/** Map detected stacks → VS Code workspace settings. */
+function buildVscodeSettings(stacks) {
+  const settings = {};
+
+  const hasTs = stacks.includes('typescript') || stacks.includes('node') || stacks.includes('react') || stacks.includes('nextjs');
+  const hasPython = stacks.includes('python');
+  const hasGo = stacks.includes('go');
+  const hasRust = stacks.includes('rust');
+
+  if (hasTs) {
+    Object.assign(settings, {
+      'editor.formatOnSave': true,
+      'editor.defaultFormatter': 'esbenp.prettier-vscode',
+      '[typescript]': { 'editor.defaultFormatter': 'esbenp.prettier-vscode' },
+      '[typescriptreact]': { 'editor.defaultFormatter': 'esbenp.prettier-vscode' },
+      '[javascript]': { 'editor.defaultFormatter': 'esbenp.prettier-vscode' },
+      '[javascriptreact]': { 'editor.defaultFormatter': 'esbenp.prettier-vscode' },
+      'typescript.preferences.preferTypeOnlyAutoImports': true,
+      'typescript.suggest.completeFunctionCalls': true,
+      'eslint.validate': ['javascript', 'javascriptreact', 'typescript', 'typescriptreact'],
+    });
+  }
+
+  if (hasPython) {
+    Object.assign(settings, {
+      'editor.formatOnSave': true,
+      '[python]': { 'editor.defaultFormatter': 'charliermarsh.ruff' },
+      'python.analysis.typeCheckingMode': 'basic',
+      'ruff.fixAll': true,
+      'ruff.organizeImports': true,
+    });
+  }
+
+  if (hasGo) {
+    Object.assign(settings, {
+      'editor.formatOnSave': true,
+      '[go]': { 'editor.defaultFormatter': 'golang.go' },
+      'go.useLanguageServer': true,
+      'go.lintTool': 'golangci-lint',
+    });
+  }
+
+  if (hasRust) {
+    Object.assign(settings, {
+      'editor.formatOnSave': true,
+      '[rust]': { 'editor.defaultFormatter': 'rust-lang.rust-analyzer' },
+      'rust-analyzer.checkOnSave': true,
+      'rust-analyzer.check.command': 'clippy',
+    });
+  }
+
+  return settings;
 }
 
 async function installSkillBundle({ runtimes, replace = false }) {
@@ -360,11 +499,25 @@ export async function executeApplyPreferences({ cavemanMode = 'off', thinkingEna
     results.push(await writeTextIfChanged(skillPath, buildCavemanSkillMd(cavemanMode)));
   }
 
-  // 2. Extended thinking preference for Claude Code
-  if (claudeEnabled && thinkingEnabled !== undefined) {
+  // 2. Extended thinking + statusLine for Claude Code
+  if (claudeEnabled) {
     const settingsPath = expandHome('~/.claude/settings.json');
     const existing = (await readJsonIfExists(settingsPath)) ?? {};
-    const next = { ...existing, alwaysThinkingEnabled: Boolean(thinkingEnabled) };
+    const next = { ...existing };
+    if (thinkingEnabled !== undefined) {
+      next.alwaysThinkingEnabled = Boolean(thinkingEnabled);
+    }
+    // Add a caveman indicator to the status line so it's visible at a glance
+    const modeEmoji = { lite: '🗿', full: '🗿🗿', ultra: '🗿🗿🗿', wenyan: '甲', off: '' };
+    if (cavemanMode !== 'off') {
+      const label = `caveman:${cavemanMode} ${modeEmoji[cavemanMode] ?? ''}`.trim();
+      next.statusLine = label;
+    } else {
+      // Remove caveman from statusLine if turning off — leave other content intact
+      if (typeof next.statusLine === 'string' && next.statusLine.startsWith('caveman:')) {
+        delete next.statusLine;
+      }
+    }
     results.push(await writeJsonIfChanged(settingsPath, next));
   }
 

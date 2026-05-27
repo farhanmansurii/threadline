@@ -4,6 +4,7 @@ import { detectProject } from './core/detect-project.mjs';
 import {
   executeApplyPreferences,
   executeHandoffCreate,
+  executeLspInit,
   executeProjectInit,
   executeRagIndex,
   executeSetup,
@@ -381,9 +382,24 @@ async function runInit(flags) {
     );
   }
 
+  // ── LSP config ──
+  let writeLsp = flags.lsp !== undefined ? Boolean(flags.lsp) : null;
+  if (writeLsp === null && profile.stacks.length && !flags.yes) {
+    writeLsp = guardCancel(
+      await p.confirm({
+        message: `Write .vscode/extensions.json + settings.json for ${chalk.cyan(profile.stacks.join(', '))}?`,
+        initialValue: true,
+      }),
+    );
+  }
+  writeLsp ??= true;
+
   if (flags.dryRun) {
     const plan = createProjectPlan({ profile, mode, dryRun: true });
     printPlanInteractive(plan);
+    if (writeLsp && profile.stacks.length) {
+      p.log.info(`Would write .vscode/extensions.json and .vscode/settings.json`);
+    }
     p.outro(chalk.dim('Dry run — nothing written.'));
     return;
   }
@@ -392,7 +408,7 @@ async function runInit(flags) {
   s2.start('Initialising project…');
   let plan;
   try {
-    plan = await executeProjectInit({ profile, mode });
+    plan = await executeProjectInit({ profile, mode, lsp: false }); // LSP handled below for better UX
     s2.stop('Project initialised');
   } catch (err) {
     s2.stop(chalk.red('Init failed'));
@@ -401,7 +417,22 @@ async function runInit(flags) {
     return;
   }
 
-  printResultsNote(plan.results, 'Written files');
+  printResultsNote(plan.results, 'Project files');
+
+  // ── Write LSP config ──
+  if (writeLsp && profile.stacks.length) {
+    const sl = p.spinner();
+    sl.start('Writing editor config…');
+    try {
+      const lspPlan = await executeLspInit({ profile });
+      sl.stop('Editor config ready');
+      printResultsNote(lspPlan.results, 'LSP / editor');
+    } catch (err) {
+      sl.stop(chalk.yellow('LSP config skipped'));
+      p.log.warn(err.message);
+    }
+  }
+
   p.outro(`${chalk.green('✓')}  Project ready`);
 }
 

@@ -1,21 +1,23 @@
 {
-  "id": "fullstack-js",
-  "name": "Fullstack JavaScript",
+  "id": "engineering-discipline",
+  "name": "Engineering Discipline",
   "skills": [
     "threadline-core",
-    "react-vite",
-    "nextjs",
-    "node-firebase",
-    "playwright-ui",
+    "mp-setup-skills",
     "mp-diagnose",
     "mp-tdd",
     "mp-grill-with-docs",
+    "mp-grill-me",
     "mp-improve-codebase-architecture",
     "mp-zoom-out",
+    "mp-to-prd",
+    "mp-to-issues",
+    "mp-triage",
     "mp-prototype",
     "mp-caveman",
+    "mp-handoff",
     "mp-write-a-skill"
   ],
-  "mcp": ["context7", "github", "memory", "playwright"],
+  "mcp": ["github", "memory"],
   "runtimes": ["claude", "codex"]
 }

@@ -11,6 +11,15 @@
     "triggers": { "type": "array", "items": { "type": "string" } },
     "requires": { "type": "array", "items": { "type": "string" } },
     "optional": { "type": "array", "items": { "type": "string" } },
+    "source": {
+      "type": "object",
+      "properties": {
+        "type": { "enum": ["local", "github"] },
+        "repo": { "type": "string" },
+        "skill": { "type": "string" },
+        "license": { "type": "string" }
+      }
+    },
     "runtimes": {
       "type": "object",
       "additionalProperties": {

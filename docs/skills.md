@@ -49,3 +49,13 @@ Threadline uses skill packs rather than one large always-loaded setup.
 - Hooks are never enabled without explicit approval.
 - Secrets and credentials are never packaged in skills.
 - Library skills stay searchable without becoming default context.
+
+## External Sources
+
+Threadline can reference upstream skill repos as optional packs.
+
+Current curated source:
+
+- `mattpocock/skills` — engineering discipline workflows such as diagnosis, TDD, architecture review, grilling, PRDs, issue slicing, handoff, Caveman, and skill authoring.
+
+External skills should be fetched and validated by the installer before use. They should not be silently vendored or auto-enabled.

@@ -1,6 +1,7 @@
 import { detectProject } from './core/detect-project.mjs';
 import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
+import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
 import { printPlan } from './utils/print.mjs';
 
 const HELP = `Threadline
@@ -9,6 +10,8 @@ Usage:
   threadline setup [--dry-run] [--merge|--adopt|--replace] [--runtimes claude,codex]
   threadline init [--path <repo>] [--dry-run] [--local|--repo]
   threadline detect [--path <repo>] [--json]
+  threadline skills list [--json]
+  threadline skills recommend [--path <repo>] [--json]
   threadline paths
 
 Defaults:
@@ -36,6 +39,24 @@ export async function main(argv) {
     if (flags.json) console.log(JSON.stringify(profile, null, 2));
     else printProject(profile);
     return;
+  }
+
+  if (command === 'skills') {
+    const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'list';
+    const registry = await readSkillRegistry();
+    if (subcommand === 'list') {
+      if (flags.json) console.log(JSON.stringify(registry.packs, null, 2));
+      else printSkills(registry.packs);
+      return;
+    }
+    if (subcommand === 'recommend') {
+      const profile = await detectProject(flags.path || process.cwd());
+      const skills = recommendSkillsForProfile(registry, profile);
+      if (flags.json) console.log(JSON.stringify({ profile, skills }, null, 2));
+      else printSkills(skills, `Recommended for ${profile.name}`);
+      return;
+    }
+    throw new Error(`Unknown skills command: ${subcommand}`);
   }
 
   if (command === 'setup') {
@@ -96,4 +117,12 @@ function printProject(profile) {
   console.log(`Root:    ${profile.root}`);
   console.log(`Stacks:  ${profile.stacks.join(', ') || 'unknown'}`);
   console.log(`Presets: ${profile.recommendedPresets.join(', ') || 'minimal'}`);
+}
+
+function printSkills(skills, title = 'Skills') {
+  console.log(title);
+  for (const skill of skills) {
+    const source = skill.source?.repo ? ` (${skill.source.repo}:${skill.source.skill})` : '';
+    console.log(`- ${skill.id} [${skill.bucket}]${source}`);
+  }
 }

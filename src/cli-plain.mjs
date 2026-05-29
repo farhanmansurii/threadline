@@ -13,6 +13,7 @@ import {
   executeSkillInstall,
 } from './core/execute.mjs';
 import { executeWatchInstall, executeWatchRemove } from './core/watch.mjs';
+import { executeSkillsAdd } from './core/skills-add.mjs';
 import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
@@ -30,6 +31,7 @@ Usage:
   threadline detect [--path <repo>] [--json]
   threadline skills list [--json]
   threadline skills install [skill-id ...] [--all] [--replace] [--runtimes claude,codex,cursor,kimi,opencode,...]
+  threadline skills add <owner/repo> [--skill <name>] [--runtimes claude,codex] [--project]
   threadline skills recommend [--path <repo>] [--json]
   threadline tools list [--json]
   threadline tools detect
@@ -117,6 +119,19 @@ export async function main(argv) {
       const skills = recommendSkillsForProfile(registry, profile);
       if (flags.json) console.log(JSON.stringify({ profile, skills }, null, 2));
       else printSkills(skills, `Recommended for ${profile.name}`);
+      return;
+    }
+    if (subcommand === 'add') {
+      const repo = packIds[0];
+      if (!repo) throw new Error('Usage: threadline skills add <owner/repo> [--skill <name>] [--runtimes claude,codex] [--project]');
+      const result = await executeSkillsAdd({
+        repo,
+        skill: typeof flags.skill === 'string' ? flags.skill : undefined,
+        runtimes: flags.runtimes ? parseList(flags.runtimes) : undefined,
+        project: Boolean(flags.project),
+      });
+      console.log(`Installed ${repo} for ${result.installed.map((a) => a.agent).join(', ')} (${result.scope}) -> ${result.lockTarget}`);
+      if (result.unsupported.length) console.log(`Not installed (unsupported by npx skills): ${result.unsupported.join(', ')}`);
       return;
     }
     throw new Error(`Unknown skills command: ${subcommand}`);
@@ -229,6 +244,7 @@ export async function main(argv) {
     } else {
       console.log(`Auto-handoff already enabled for ${result.runtime} (${result.events.join(', ')}).`);
     }
+    if (result.note) console.log(`Note: ${result.note}`);
     return;
   }
 

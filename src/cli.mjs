@@ -17,6 +17,7 @@ import {
   executeSkillInstall,
 } from './core/execute.mjs';
 import { executeWatchInstall, executeWatchRemove } from './core/watch.mjs';
+import { executeSkillsAdd } from './core/skills-add.mjs';
 import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
@@ -343,10 +344,49 @@ async function runSkillsRecommend(flags) {
   p.note(lines.join('\n'), `Recommended for ${chalk.bold(profile.name)}`);
 }
 
+async function runSkillsAdd(flags, rest) {
+  const repo = rest.find((arg) => !arg.startsWith('--') && arg !== 'add' && arg !== 'skills');
+  if (!repo) {
+    p.log.error('Usage: threadline skills add <owner/repo> [--skill <name>] [--runtimes claude,codex] [--project]');
+    process.exitCode = 1;
+    return;
+  }
+  const runtimes = flags.runtimes ? parseList(flags.runtimes) : undefined;
+  const s = p.spinner();
+  s.start(`Installing ${repo} via npx skills…`);
+  let result;
+  try {
+    result = await executeSkillsAdd({
+      repo,
+      skill: typeof flags.skill === 'string' ? flags.skill : undefined,
+      runtimes,
+      project: Boolean(flags.project),
+    });
+    s.stop(`Installed ${chalk.bold(repo)}`);
+  } catch (err) {
+    s.stop(chalk.red('Install failed'));
+    p.log.error(err.message);
+    process.exitCode = 1;
+    return;
+  }
+  p.note(
+    [
+      `${chalk.dim('agents')}   ${result.installed.map((a) => a.agent).join(', ')}`,
+      `${chalk.dim('scope')}    ${result.scope}`,
+      `${chalk.dim('lock')}     ${result.lockTarget}`,
+    ].join('\n'),
+    'Skill installed',
+  );
+  if (result.unsupported.length) {
+    p.log.warn(`Not installed (unsupported by npx skills): ${result.unsupported.join(', ')}`);
+  }
+}
+
 async function runSkills(subcommand, flags, rest) {
   if (subcommand === 'list') { await runSkillsList(); return; }
   if (subcommand === 'recommend') { await runSkillsRecommend(flags); return; }
   if (subcommand === 'install') { await runSkillsInstall(flags, rest); return; }
+  if (subcommand === 'add') { await runSkillsAdd(flags, rest); return; }
   p.log.error(`Unknown skills subcommand: ${chalk.bold(subcommand)}`);
   process.exitCode = 1;
 }
@@ -645,9 +685,11 @@ async function runWatch(flags) {
       ].join('\n'),
       'Auto-handoff enabled',
     );
+    if (result.note) p.log.warn(result.note);
     p.outro(`${chalk.green('✓')}  Threadline will capture a handoff on those events. Undo: ${chalk.cyan('threadline unwatch')}`);
   } else {
     p.log.message(`Auto-handoff already enabled for ${chalk.bold(runtime)} (${result.events.join(', ')}).`);
+    if (result.note) p.log.warn(result.note);
   }
 }
 
@@ -900,6 +942,7 @@ ${chalk.bold('Usage')}
   ${chalk.cyan('threadline detect')}    ${chalk.dim('[--path <dir>] [--json]')}
   ${chalk.cyan('threadline skills')}    ${chalk.dim('list')}
   ${chalk.cyan('threadline skills')}    ${chalk.dim('install  [--all] [--replace] [--runtimes claude,codex,cursor,kimi,opencode,...] [pack-id ...]')}
+  ${chalk.cyan('threadline skills')}    ${chalk.dim('add <owner/repo>  [--skill <name>] [--runtimes claude,codex] [--project]   # via npx skills')}
   ${chalk.cyan('threadline skills')}    ${chalk.dim('recommend  [--path <dir>]')}
   ${chalk.cyan('threadline tools')}     ${chalk.dim('list [--json]')}
   ${chalk.cyan('threadline tools')}     ${chalk.dim('detect')}

@@ -73,14 +73,26 @@ threadline handoff resume --latest --format codex | <pipe into Codex>
 Manual handoffs only happen if you remember. `watch` installs runtime hooks so a handoff is captured automatically at natural boundaries — session end and pre-compaction — when continuity matters most.
 
 ```bash
-threadline watch                              # Claude, SessionEnd + PreCompact
+threadline watch                              # Claude: SessionEnd + PreCompact
+threadline watch --runtime codex              # Codex:  Stop + PreCompact
 threadline watch --on sessionend              # choose events
 threadline unwatch                            # remove Threadline's hooks
+threadline unwatch --runtime codex
 ```
 
-`watch` merges into `~/.claude/settings.json` idempotently: it preserves existing hooks and unrelated settings, marks its own entries with a stable command sentinel, and `unwatch` removes exactly those. Auto-fired captures skip writing when the working tree is clean and in sync, so the vault is not spammed with empty handoffs.
+`watch` merges idempotently into the runtime's hook file, preserving existing hooks and unrelated keys, marking its own entries with a stable command sentinel; `unwatch` removes exactly those. Auto-fired captures skip writing when the working tree is clean and in sync, so the vault is not spammed with empty handoffs.
 
-> Currently `watch` targets the `claude` runtime. Other runtimes use manual or `/handoff`-driven capture until their hook adapters land.
+| Runtime | Hook file | Default events | Notes |
+|---------|-----------|----------------|-------|
+| `claude` | `~/.claude/settings.json` | `SessionEnd`, `PreCompact` | — |
+| `codex` | `~/.codex/hooks.json` | `Stop`, `PreCompact` | requires `features.hooks = true` in `~/.codex/config.toml` |
+
+> Cursor, Kimi, and OpenCode use manual or skill-driven capture until their hook adapters land.
+
+### A note on invocation per runtime
+
+- **Claude Code**: Threadline installs `/handoff` and `/resume` as slash commands.
+- **Codex**: Threadline installs `handoff`/`resume` as Agent Skills under `~/.codex/skills/`. Codex invokes a skill by description match or explicitly with `$handoff` / `$resume` — not `/` slash commands (those are Codex's deprecated custom prompts).
 
 ## Hook Policy
 

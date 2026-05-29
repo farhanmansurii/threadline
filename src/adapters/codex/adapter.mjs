@@ -6,8 +6,10 @@ import { readTemplate, repoRoot } from '../../core/templates.mjs';
 export const id = 'codex';
 export const name = 'Codex';
 export const homeDir = '~/.codex';
-// Codex has no native slash command files. Commands are written as a routing
-// table in AGENTS.md via finalizeInstall after all packs are processed.
+// Codex loads skills from ~/.codex/skills/<name>/SKILL.md and invokes them by
+// description match or explicit `$name` reference — NOT `/` slash commands
+// (those are Codex's deprecated custom prompts under ~/.codex/prompts/).
+// finalizeInstall writes a reference table of installed skills to AGENTS.md.
 export const supports = { skills: true, commands: false, config: true };
 
 export async function installSkills(sourceDir, { replace = false } = {}) {
@@ -17,11 +19,12 @@ export async function installSkills(sourceDir, { replace = false } = {}) {
 }
 
 /**
- * Install Codex slash commands as individual skill files.
+ * Install Threadline commands as Codex skills — one SKILL.md per command under
+ * ~/.codex/skills/<command>/. Codex invokes them by description match or via an
+ * explicit `$command` reference.
  *
- * Codex's slash command picker reads `name:` from each SKILL.md frontmatter
- * in ~/.codex/skills/. Each command in a pack gets its own skill directory so
- * `/handoff`, `/resume`, etc. appear as native slash commands in the TUI.
+ * Claude command templates have no YAML frontmatter, which Codex skills require
+ * (name + description drive discovery), so we synthesize it when missing.
  *
  * Template resolution order:
  *   1. templates/codex/command-<command>.md  (Codex-specific, preferred)
@@ -31,12 +34,20 @@ export async function installSkills(sourceDir, { replace = false } = {}) {
 export async function installCommands(commands) {
   const results = [];
   for (const command of commands) {
-    const content = await resolveCommandTemplate(command);
+    const content = ensureSkillFrontmatter(await resolveCommandTemplate(command), command);
     const targetDir = path.join(homeDir, 'skills', command);
     await ensureDir(targetDir);
     results.push(await writeTextIfChanged(path.join(targetDir, 'SKILL.md'), content));
   }
   return results;
+}
+
+/** Codex skills require YAML frontmatter with name/description; add it if absent. */
+function ensureSkillFrontmatter(content, command) {
+  if (content.trimStart().startsWith('---')) return content;
+  const firstHeading = content.match(/^#\s*(.+)$/m)?.[1]?.trim();
+  const description = firstHeading ? `${firstHeading} — Threadline skill` : `${command} — Threadline skill`;
+  return `---\nname: ${command}\ndescription: ${description}\n---\n\n${content}`;
 }
 
 async function resolveCommandTemplate(command) {
@@ -53,8 +64,9 @@ async function resolveCommandTemplate(command) {
 }
 
 /**
- * Called once after all packs are installed. Writes a slash command routing
- * table to ~/.codex/AGENTS.md so users can type /command to invoke any skill.
+ * Called once after all packs are installed. Writes a reference table of the
+ * installed Threadline skills to ~/.codex/AGENTS.md. Codex invokes a skill when
+ * a request matches its description, or explicitly when the user types `$name`.
  *
  * @param {Array} packs - The full list of pack objects installed for this runtime.
  */
@@ -68,25 +80,25 @@ export async function finalizeInstall(packs) {
   }
   if (!rows.length) return null;
 
-  const maxCmd = Math.max(...rows.map((r) => r.command.length + 1)); // +1 for leading /
-  const maxName = Math.max(...rows.map((r) => r.name.length));
-  const header = `| ${'Command'.padEnd(maxCmd)} | ${'Skill'.padEnd(maxName)} | Triggers |`;
-  const sep = `| ${'-'.repeat(maxCmd)} | ${'-'.repeat(maxName)} | -------- |`;
+  const maxInvoke = Math.max('Invoke'.length, ...rows.map((r) => r.command.length + 1)); // +1 for leading $
+  const maxName = Math.max('Skill'.length, ...rows.map((r) => r.name.length));
+  const header = `| ${'Invoke'.padEnd(maxInvoke)} | ${'Skill'.padEnd(maxName)} | Triggers |`;
+  const sep = `| ${'-'.repeat(maxInvoke)} | ${'-'.repeat(maxName)} | -------- |`;
   const tableRows = rows.map(
     (r) =>
-      `| \`/${r.command}\`${' '.repeat(maxCmd - r.command.length - 1)} | ${r.name.padEnd(maxName)} | ${r.triggers || '—'} |`,
+      `| \`$${r.command}\`${' '.repeat(maxInvoke - r.command.length - 1)} | ${r.name.padEnd(maxName)} | ${r.triggers || '—'} |`,
   );
 
   const block = [
-    '## Threadline Slash Commands',
+    '## Threadline Skills',
     '',
-    'Type `/command` to activate a Threadline skill. All commands below are installed and ready to use.',
+    'These skills are installed under `~/.codex/skills/`. Codex loads one automatically when your request matches its description; to invoke explicitly, reference it with `$name`. (These are Agent Skills, not `/` slash commands.)',
     '',
     header,
     sep,
     ...tableRows,
     '',
-    '> Commands are defined by Threadline. Re-run `threadline install` to refresh this list.',
+    '> Skills are defined by Threadline. Re-run `threadline install` to refresh this list.',
   ].join('\n');
 
   return upsertManagedBlock(path.join(homeDir, 'AGENTS.md'), 'THREADLINE_SLASH_COMMANDS', block);
@@ -95,25 +107,52 @@ export async function finalizeInstall(packs) {
 export async function installConfig({ replace = false } = {}) {
   const configPath = path.join(homeDir, 'config.toml');
   const managed = await readTemplate('templates/codex/config.managed.toml');
+
+  // Write the agent config layers first, then register each as a named Codex
+  // agent (`[agents.<key>]`) inside the managed block — without registration the
+  // ~/.codex/agents/*.toml files are inert and never surface.
+  const { results: agentResults, agents } = await installAgents();
+  const agentsBlock = renderAgentsRegistration(agents);
+
   const configResults = [];
   if (replace) {
-    configResults.push(await writeTextIfChanged(configPath, managed.trimEnd() + '\n'));
+    const full = agentsBlock
+      ? managed.replace('# END THREADLINE_MANAGED', `${agentsBlock}\n# END THREADLINE_MANAGED`)
+      : managed;
+    configResults.push(await writeTextIfChanged(configPath, full.trimEnd() + '\n'));
   } else {
     const body = managed
       .replace('# BEGIN THREADLINE_MANAGED\n', '')
       .replace('\n# END THREADLINE_MANAGED', '');
-    configResults.push(await upsertManagedBlock(configPath, 'THREADLINE_MANAGED', body));
+    const bodyWithAgents = agentsBlock ? `${body.trimEnd()}\n\n${agentsBlock}` : body;
+    configResults.push(await upsertManagedBlock(configPath, 'THREADLINE_MANAGED', bodyWithAgents));
   }
-  const agentResults = await installAgents();
   return [...configResults, ...agentResults];
 }
 
+/** Render `[agents.<key>]` registration tables pointing at the agent config layers. */
+function renderAgentsRegistration(agents) {
+  if (!agents.length) return '';
+  return agents
+    .map(
+      (agent) =>
+        `[agents.${agent.key}]\nconfig_file = "agents/${agent.file}"\ndescription = "${tomlEscape(agent.description)}"`,
+    )
+    .join('\n\n');
+}
+
+function tomlEscape(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 /**
- * Install Codex agent TOML files from templates/codex/agents/ to ~/.codex/agents/.
+ * Install Codex agent config layers from templates/codex/agents/ to
+ * ~/.codex/agents/. These define named agent roles (Explorer, Reviewer, Docs
+ * Researcher). installConfig registers them via `[agents.<key>]` so Codex
+ * surfaces them. Files are written idempotently.
  *
- * These define named agent roles (Explorer, Reviewer, Docs Researcher) that Codex
- * surfaces in its agent picker. Each file is written idempotently — only changed
- * files trigger a write action.
+ * Returns { results, agents } where agents carry the metadata needed to register
+ * each layer ({ key, file, description }).
  */
 async function installAgents() {
   const ROOT = repoRoot();
@@ -125,16 +164,19 @@ async function installAgents() {
   try {
     entries = await fs.readdir(agentsTemplateDir);
   } catch {
-    return [];
+    return { results: [], agents: [] };
   }
 
   const results = [];
+  const agents = [];
   for (const entry of entries) {
     if (!entry.endsWith('.toml')) continue;
     const content = await readTemplate(`templates/codex/agents/${entry}`);
     results.push(await writeTextIfChanged(path.join(targetDir, entry), content));
+    const description = content.match(/^description\s*=\s*"([^"]*)"/m)?.[1] ?? '';
+    agents.push({ key: entry.replace(/\.toml$/, ''), file: entry, description });
   }
-  return results;
+  return { results, agents };
 }
 
 export async function adopt() {

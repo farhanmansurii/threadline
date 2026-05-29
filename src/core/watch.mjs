@@ -6,16 +6,50 @@ import { expandHome, readJsonIfExists, writeJsonIfChanged } from '../utils/fs.mj
 // sentinel used to find and remove our entries on `unwatch`, so it must stay
 // stable and unique.
 const AUTO_COMMAND = 'threadline handoff create --auto';
-const DEFAULT_EVENTS = ['SessionEnd', 'PreCompact'];
+
+// Per-runtime hook wiring. Both Claude Code and Codex use the same nested hook
+// JSON shape ({ hooks: { Event: [ { hooks: [ { type, command } ] } ] } }); only
+// the file and the available lifecycle events differ.
+//   - Claude: ~/.claude/settings.json  (shares the file with other settings)
+//   - Codex:  ~/.codex/hooks.json       (dedicated; needs features.hooks = true)
+const RUNTIME_HOOKS = {
+  claude: {
+    file: () => path.join(getAdapter('claude').homeDir, 'settings.json'),
+    defaultEvents: ['SessionEnd', 'PreCompact'],
+    note: null,
+  },
+  codex: {
+    file: () => path.join(getAdapter('codex').homeDir, 'hooks.json'),
+    // Codex has no SessionEnd; Stop is the per-turn-completion boundary.
+    defaultEvents: ['Stop', 'PreCompact'],
+    note: 'Codex hooks require features.hooks = true in ~/.codex/config.toml.',
+  },
+};
+
+// Canonical casing for events the user may pass lower-cased via --on.
 const EVENT_ALIASES = {
   sessionend: 'SessionEnd',
+  sessionstart: 'SessionStart',
   precompact: 'PreCompact',
+  postcompact: 'PostCompact',
   stop: 'Stop',
 };
 
-/** Normalize a comma list or array of event names to canonical Claude casing. */
-function normalizeEvents(input) {
-  if (!input || input === true) return [...DEFAULT_EVENTS];
+function resolveRuntime(runtime) {
+  const cfg = RUNTIME_HOOKS[runtime];
+  if (!cfg) {
+    const supported = Object.keys(RUNTIME_HOOKS).join(', ');
+    throw new Error(`watch supports only these runtimes: ${supported} (got "${runtime}").`);
+  }
+  // Expand here: readJsonIfExists does not expand `~`, but writeJsonIfChanged
+  // does. Reading and writing must resolve to the same absolute path, or we
+  // read nothing and overwrite the user's real settings. (Regression-tested.)
+  return { ...cfg, settingsPath: expandHome(cfg.file()) };
+}
+
+/** Normalize a comma list / array of event names to canonical casing. */
+function normalizeEvents(input, defaults) {
+  if (!input || input === true) return [...defaults];
   const names = Array.isArray(input) ? input : String(input).split(',');
   const out = [];
   for (const raw of names) {
@@ -24,7 +58,7 @@ function normalizeEvents(input) {
     const name = EVENT_ALIASES[key] ?? raw.trim();
     if (!out.includes(name)) out.push(name);
   }
-  return out.length ? out : [...DEFAULT_EVENTS];
+  return out.length ? out : [...defaults];
 }
 
 /** True when a hook entry is one Threadline installed (matches the sentinel). */
@@ -38,27 +72,13 @@ function makeEntry() {
   return { hooks: [{ type: 'command', command: AUTO_COMMAND }] };
 }
 
-function claudeSettingsPath() {
-  // Expand here: readJsonIfExists does not expand `~`, but writeJsonIfChanged
-  // does. Reading and writing must resolve to the same absolute path, or we
-  // read nothing and overwrite the user's real settings.json. (Regression-tested.)
-  return expandHome(path.join(getAdapter('claude').homeDir, 'settings.json'));
-}
-
-function assertClaude(runtime) {
-  if (runtime !== 'claude') {
-    throw new Error(`watch currently supports only the "claude" runtime (got "${runtime}").`);
-  }
-}
-
 /**
- * Install auto-handoff hooks into the runtime's settings, idempotently. Existing
- * hooks and unrelated settings are preserved. Re-running is a no-op.
+ * Install auto-handoff hooks into the runtime's hook file, idempotently. Existing
+ * hooks and unrelated keys are preserved. Re-running is a no-op.
  */
 export async function executeWatchInstall({ runtime = 'claude', events } = {}) {
-  assertClaude(runtime);
-  const targetEvents = normalizeEvents(events);
-  const settingsPath = claudeSettingsPath();
+  const { settingsPath, defaultEvents, note } = resolveRuntime(runtime);
+  const targetEvents = normalizeEvents(events, defaultEvents);
   const current = (await readJsonIfExists(settingsPath)) ?? {};
   const hooks = { ...(current.hooks ?? {}) };
 
@@ -69,16 +89,15 @@ export async function executeWatchInstall({ runtime = 'claude', events } = {}) {
 
   const next = { ...current, hooks };
   const result = await writeJsonIfChanged(settingsPath, next);
-  return { ...result, runtime, events: targetEvents, command: AUTO_COMMAND };
+  return { ...result, runtime, events: targetEvents, command: AUTO_COMMAND, note };
 }
 
 /**
  * Remove every auto-handoff hook Threadline installed, leaving unrelated hooks
- * and settings intact. Reversible counterpart to executeWatchInstall.
+ * and keys intact. Reversible counterpart to executeWatchInstall.
  */
 export async function executeWatchRemove({ runtime = 'claude' } = {}) {
-  assertClaude(runtime);
-  const settingsPath = claudeSettingsPath();
+  const { settingsPath } = resolveRuntime(runtime);
   const current = await readJsonIfExists(settingsPath);
   if (!current?.hooks) {
     return { changed: false, target: settingsPath, runtime };

@@ -9,11 +9,13 @@ Shipped:
 - git-grounded handoff capture (branch, HEAD, ahead/behind, changed files, recent commits)
 - `handoff list` and `handoff resume` (by id, `--latest`, prefix match)
 - agent-replayable resume brief with per-tool framing (`--format claude|codex|plain`)
-- auto-capture: `handoff create --auto` + `watch`/`unwatch` session hooks (Claude)
+- auto-capture: `handoff create --auto` + `watch`/`unwatch` session hooks (Claude `settings.json`, Codex `hooks.json`)
+- Codex skills installed with valid frontmatter; correct `$name` invocation (not `/` slash)
 
 Next:
 
-- richer auto-capture triggers and per-runtime hook adapters (Codex, Cursor)
+- auto-injection on session start (Claude/Codex `SessionStart` hook fires `resume --latest`)
+- hook adapters for Cursor / Kimi / OpenCode
 - handoff timeline: queryable per-project history of how the codebase evolved under agents
 - team handoffs: hand off from your agent to a teammate's agent
 

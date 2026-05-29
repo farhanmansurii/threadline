@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
 import { captureGitState } from '../src/utils/git.mjs';
+import { mapRuntimesToAgents, buildSkillsAddArgs } from '../src/core/skills-add.mjs';
 
 const execFileAsync = promisify(execFile);
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -307,6 +308,74 @@ test('watch installs auto-handoff hooks idempotently and preserves unrelated set
   assert.equal(settings.model, 'opus');
   assert.ok(hasCommand(settings.hooks.SessionEnd, 'echo hi')); // still preserved
   assert.ok(!JSON.stringify(settings).includes('threadline handoff create --auto'));
+});
+
+test('watch --runtime codex writes and removes ~/.codex/hooks.json', async () => {
+  const env = await isolatedEnv();
+  const hooksPath = path.join(env.HOME, '.codex', 'hooks.json');
+
+  const installed = await run(['watch', '--runtime', 'codex'], { env });
+  assert.match(installed.stdout, /features\.hooks/); // feature-flag note surfaced
+
+  const hooks = JSON.parse(await fs.readFile(hooksPath, 'utf8'));
+  assert.ok(hasCommand(hooks.hooks.Stop, 'threadline handoff create --auto'));
+  assert.ok(hasCommand(hooks.hooks.PreCompact, 'threadline handoff create --auto'));
+
+  await run(['unwatch', '--runtime', 'codex'], { env });
+  const after = JSON.parse(await fs.readFile(hooksPath, 'utf8'));
+  assert.ok(!JSON.stringify(after).includes('threadline handoff create --auto'));
+});
+
+test('codex command skills are written with YAML frontmatter', async () => {
+  const env = await isolatedEnv();
+  await run(['setup', '--replace', '--yes', '--runtimes', 'codex'], { env });
+
+  const resumeSkill = path.join(env.HOME, '.codex', 'skills', 'resume', 'SKILL.md');
+  const content = await fs.readFile(resumeSkill, 'utf8');
+  assert.ok(content.startsWith('---'), 'Codex skill must start with YAML frontmatter');
+  assert.match(content, /name: resume/);
+});
+
+test('codex registers agent config layers in the managed config block', async () => {
+  const env = await isolatedEnv();
+  await run(['setup', '--replace', '--yes', '--runtimes', 'codex'], { env });
+
+  const config = await fs.readFile(path.join(env.HOME, '.codex', 'config.toml'), 'utf8');
+  assert.match(config, /\[agents\.explorer\]/);
+  assert.match(config, /config_file = "agents\/explorer\.toml"/);
+
+  // Registration must live inside the managed block so replace/remove is clean.
+  const managed = config.slice(
+    config.indexOf('# BEGIN THREADLINE_MANAGED'),
+    config.indexOf('# END THREADLINE_MANAGED'),
+  );
+  assert.ok(managed.includes('[agents.explorer]'));
+  assert.ok(await exists(path.join(env.HOME, '.codex', 'agents', 'explorer.toml')));
+});
+
+test('mapRuntimesToAgents maps supported runtimes and flags unsupported ones', () => {
+  const { supported, unsupported } = mapRuntimesToAgents(['claude', 'codex', 'kimi']);
+  assert.deepEqual(supported.map((s) => s.agent), ['claude-code', 'codex']);
+  assert.deepEqual(unsupported, ['kimi']);
+});
+
+test('buildSkillsAddArgs builds the npx skills add argv (global scope)', () => {
+  const args = buildSkillsAddArgs({
+    repo: 'vercel-labs/agent-skills',
+    skill: 'frontend-design',
+    agents: ['claude-code', 'codex'],
+    project: false,
+    yes: true,
+  });
+  assert.deepEqual(args, [
+    '--yes', 'skills', 'add', 'vercel-labs/agent-skills',
+    '--skill', 'frontend-design', '-g', '-a', 'claude-code', '-a', 'codex', '-y',
+  ]);
+});
+
+test('buildSkillsAddArgs omits -g for project scope and -y when not confirmed', () => {
+  const args = buildSkillsAddArgs({ repo: 'owner/repo', agents: ['codex'], project: true, yes: false });
+  assert.deepEqual(args, ['--yes', 'skills', 'add', 'owner/repo', '-a', 'codex']);
 });
 
 function hasCommand(eventList, command) {

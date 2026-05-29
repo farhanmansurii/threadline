@@ -59,3 +59,22 @@ Current curated source:
 - `mattpocock/skills` — engineering discipline workflows such as diagnosis, TDD, architecture review, grilling, PRDs, issue slicing, handoff, and skill authoring.
 
 External skills should be fetched and validated by the installer before use. They should not be silently vendored or auto-enabled.
+
+## Installing ecosystem skills (`threadline skills add`)
+
+For arbitrary skills from the open [Agent Skills ecosystem](https://www.skills.sh) (`skills.sh`, `vercel-labs/agent-skills`, any `owner/repo`), Threadline delegates the per-agent install to the vercel `npx skills` CLI rather than re-implementing it. `npx skills` already handles each agent's path, frontmatter, and multi-file layout per the shared Agent Skills spec; Threadline owns runtime mapping and provenance on top.
+
+```bash
+threadline skills add vercel-labs/agent-skills --skill frontend-design
+threadline skills add owner/repo --runtimes claude,codex
+threadline skills add owner/repo --project          # project scope instead of global
+```
+
+What it does:
+
+1. Resolves target runtimes (explicit `--runtimes`, else detected installed runtimes).
+2. Maps them to vercel agent ids: `claude → claude-code`, `codex → codex`, `cursor → cursor`, `opencode → opencode`. Runtimes the vercel CLI does not support (e.g. `kimi`) are reported, not silently skipped.
+3. Runs `npx skills add <repo> -g -a <agents> -y` (global by default; `--project` drops `-g`).
+4. Records source, skill, runtimes, scope, and timestamp under `external` in `~/.config/threadline/skills.lock.json` for provenance.
+
+Use `threadline skills install` (registry packs) for Threadline's own curated skills; use `threadline skills add` for anything from the wider ecosystem.

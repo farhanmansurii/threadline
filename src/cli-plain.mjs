@@ -4,11 +4,15 @@ import { detectProject } from './core/detect-project.mjs';
 import {
   executeApplyPreferences,
   executeHandoffCreate,
+  executeHandoffList,
+  executeHandoffResume,
+  buildAgentBrief,
   executeProjectInit,
   executeRagIndex,
   executeSetup,
   executeSkillInstall,
 } from './core/execute.mjs';
+import { executeWatchInstall, executeWatchRemove } from './core/watch.mjs';
 import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
@@ -31,7 +35,11 @@ Usage:
   threadline tools detect
   threadline tools enable <tool-id> [--runtimes claude,codex,...]
   threadline index [--path <repo>]
-  threadline handoff create [--path <repo>] [--title <title>] [--summary <summary>] [--vault <path>]
+  threadline handoff create [--path <repo>] [--title <title>] [--summary <summary>] [--vault <path>] [--auto]
+  threadline handoff list [--json]
+  threadline handoff resume <id>|--latest [--format claude|codex|plain] [--json]
+  threadline watch [--runtime claude] [--on sessionend,precompact]
+  threadline unwatch [--runtime claude]
   threadline paths
 
 Defaults:
@@ -54,7 +62,9 @@ export async function main(argv) {
     return;
   }
 
-  console.log(splash(VERSION));
+  // Banner is decorative; never emit it when output is piped/redirected or JSON
+  // is requested, or it corrupts machine-readable stdout (detect/handoff --json).
+  if (process.stdout.isTTY && !flags.json) console.log(splash(VERSION));
 
   if (command === 'paths') {
     console.log(JSON.stringify(getThreadlinePaths(), null, 2));
@@ -153,6 +163,31 @@ export async function main(argv) {
 
   if (command === 'handoff') {
     const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'create';
+    if (subcommand === 'list') {
+      const entries = await executeHandoffList();
+      if (flags.json) {
+        console.log(JSON.stringify(entries, null, 2));
+      } else if (!entries.length) {
+        console.log('No handoffs found. Create one with: threadline handoff create');
+      } else {
+        for (const entry of entries) console.log(`${entry.id}  ${entry.createdAt.slice(0, 10)}  ${entry.title}`);
+      }
+      return;
+    }
+    if (subcommand === 'resume') {
+      const id = rest.find((arg) => !arg.startsWith('--') && arg !== 'resume');
+      if (!id && !flags.latest) throw new Error('Usage: threadline handoff resume <id>  (or --latest)');
+      let projectId = null;
+      if (flags.latest) {
+        try { projectId = (await detectProject(flags.path || process.cwd())).id; } catch { projectId = null; }
+      }
+      const handoff = await executeHandoffResume({ id, latest: Boolean(flags.latest), projectId });
+      if (!handoff.found) throw new Error(id ? `No handoff found for id: ${id}` : 'No handoffs found for this project.');
+      const format = typeof flags.format === 'string' ? flags.format : 'plain';
+      const brief = buildAgentBrief(handoff, { format });
+      console.log(flags.json ? JSON.stringify({ ...handoff, brief }, null, 2) : brief);
+      return;
+    }
     if (subcommand !== 'create') throw new Error(`Unknown handoff command: ${subcommand}`);
     const profile = await detectProject(flags.path || process.cwd());
     const plan = await executeHandoffCreate({
@@ -160,7 +195,18 @@ export async function main(argv) {
       title: flags.title,
       summary: flags.summary,
       vault: flags.vault,
+      auto: Boolean(flags.auto),
     });
+    if (plan.skipped) {
+      console.log(plan.notes?.[0] ?? 'Nothing to hand off.');
+      return;
+    }
+    if (flags.auto) {
+      // Quiet output for hook-fired captures.
+      const id = plan.notes?.find((n) => n.startsWith('Resume ID:'))?.replace('Resume ID: ', '');
+      console.log(`Handoff created: ${id}`);
+      return;
+    }
     printPlan(plan);
     return;
   }
@@ -172,6 +218,25 @@ export async function main(argv) {
       ? createProjectPlan({ profile, mode, dryRun: true })
       : await executeProjectInit({ profile, mode });
     printPlan(plan);
+    return;
+  }
+
+  if (command === 'watch') {
+    const result = await executeWatchInstall({ runtime: flags.runtime || 'claude', events: flags.on });
+    if (result.changed) {
+      console.log(`Auto-handoff enabled for ${result.runtime} (${result.events.join(', ')}) -> ${result.target}`);
+      console.log('Undo with: threadline unwatch');
+    } else {
+      console.log(`Auto-handoff already enabled for ${result.runtime} (${result.events.join(', ')}).`);
+    }
+    return;
+  }
+
+  if (command === 'unwatch') {
+    const result = await executeWatchRemove({ runtime: flags.runtime || 'claude' });
+    console.log(result.changed
+      ? `Auto-handoff hooks removed for ${result.runtime}.`
+      : `No Threadline auto-handoff hooks found for ${result.runtime}.`);
     return;
   }
 

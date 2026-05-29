@@ -12,6 +12,10 @@ created_at: {{createdAt}}
 
 {{summary}}
 
+## Git State
+
+{{gitState}}
+
 ## Decisions
 
 {{decisions}}

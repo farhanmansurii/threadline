@@ -1,17 +1,23 @@
 import chalk from 'chalk';
 
 export function splash(version = '0.1.0') {
-	const art = `
-   ▄    █                               █  ▀▀█      ▀
- ▄▄█▄▄  █ ▄▄    ▄ ▄▄   ▄▄▄    ▄▄▄    ▄▄▄█    █    ▄▄▄    ▄ ▄▄    ▄▄▄
-   █    █▀  █   █▀  ▀ █▀  █  ▀   █  █▀ ▀█    █      █    █▀  █  █▀  █
-   █    █   █   █     █▀▀▀▀  ▄▀▀▀█  █   █    █      █    █   █  █▀▀▀▀
-   ▀▄▄  █   █   █     ▀█▄▄▀  ▀▄▄▀█  ▀█▄██    ▀▄▄  ▄▄█▄▄  █   █  ▀█▄▄▀
-
-        One config for Claude, Codex, Cursor, Kimi, OpenCode, and whatever
-                                                  comes next. v${version}
-`;
-	return chalk.cyan(art);
+	const art = [
+		'',
+		'   ▄    █                               █  ▀▀█      ▀',
+		' ▄▄█▄▄  █ ▄▄    ▄ ▄▄   ▄▄▄    ▄▄▄    ▄▄▄█    █    ▄▄▄    ▄ ▄▄    ▄▄▄',
+		'   █    █▀  █   █▀  ▀ █▀  █  ▀   █  █▀ ▀█    █      █    █▀  █  █▀  █',
+		'   █    █   █   █     █▀▀▀▀  ▄▀▀▀█  █   █    █      █    █   █  █▀▀▀▀',
+		'   ▀▄▄  █   █   █     ▀█▄▄▀  ▀▄▄▀█  ▀█▄██    ▀▄▄  ▄▄█▄▄  █   █  ▀█▄▄▀',
+		'',
+	].join('\n');
+	const rule = '  ·──────────────────────────────────────────────────────────·';
+	return [
+		chalk.cyan(art),
+		chalk.cyan.dim(rule),
+		chalk.white.bold('  Portable memory for agentic coding.'),
+		chalk.dim(`  Any agent resumes where the last one left off.  ·  v${version}`),
+		'',
+	].join('\n');
 }
 
 export function miniSplash() {

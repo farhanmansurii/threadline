@@ -1,5 +1,22 @@
 # Roadmap
 
+Threadline's north star is **tool-neutral continuity**: any agent resumes where any other left off, with verifiable ground truth. Everything else (config sync, project state, skills) serves that.
+
+## Phase 0: Continuity (current focus)
+
+Shipped:
+
+- git-grounded handoff capture (branch, HEAD, ahead/behind, changed files, recent commits)
+- `handoff list` and `handoff resume` (by id, `--latest`, prefix match)
+- agent-replayable resume brief with per-tool framing (`--format claude|codex|plain`)
+- auto-capture: `handoff create --auto` + `watch`/`unwatch` session hooks (Claude)
+
+Next:
+
+- richer auto-capture triggers and per-runtime hook adapters (Codex, Cursor)
+- handoff timeline: queryable per-project history of how the codebase evolved under agents
+- team handoffs: hand off from your agent to a teammate's agent
+
 ## Phase 1: Core CLI
 
 - project detection

@@ -7,12 +7,16 @@ import { detectProject } from './core/detect-project.mjs';
 import {
   executeApplyPreferences,
   executeHandoffCreate,
+  executeHandoffList,
+  executeHandoffResume,
+  buildAgentBrief,
   executeLspInit,
   executeProjectInit,
   executeRagIndex,
   executeSetup,
   executeSkillInstall,
 } from './core/execute.mjs';
+import { executeWatchInstall, executeWatchRemove } from './core/watch.mjs';
 import { getThreadlinePaths } from './core/paths.mjs';
 import { createProjectPlan, createSetupPlan } from './core/plan.mjs';
 import { readSkillRegistry, recommendSkillsForProfile } from './core/skills.mjs';
@@ -486,6 +490,19 @@ async function runIndex(flags) {
 }
 
 async function runHandoffCreate(flags) {
+  // Auto mode (hook-fired): no prompts, no banner, minimal output.
+  if (flags.auto) {
+    const profile = await detectProject(flags.path || process.cwd());
+    const plan = await executeHandoffCreate({ profile, vault: flags.vault, auto: true });
+    if (plan.skipped) {
+      console.log(plan.notes?.[0] ?? 'Nothing to hand off.');
+      return;
+    }
+    const id = plan.notes?.find((n) => n.startsWith('Resume ID:'))?.replace('Resume ID: ', '');
+    console.log(`Handoff created: ${id}`);
+    return;
+  }
+
   console.log(splash(VERSION));
   p.intro(`${chalk.bold.white('Threadline')}  ${chalk.dim('handoff create')}`);
 
@@ -551,10 +568,104 @@ async function runHandoffCreate(flags) {
   }
 }
 
-async function runHandoff(subcommand, flags) {
+async function runHandoffList(flags) {
+  const entries = await executeHandoffList();
+  if (flags.json) {
+    console.log(JSON.stringify(entries, null, 2));
+    return;
+  }
+  if (!entries.length) {
+    p.log.warn('No handoffs found. Create one with: threadline handoff create');
+    return;
+  }
+  const lines = entries.map(
+    (entry) => `  ${chalk.cyan(entry.id)}  ${chalk.dim(entry.createdAt.slice(0, 10))}  ${entry.title}`,
+  );
+  p.note(lines.join('\n'), `Handoffs  ${chalk.dim(`(${entries.length})`)}`);
+}
+
+async function runHandoffResume(id, flags) {
+  if (!id && !flags.latest) {
+    p.log.error('Usage: threadline handoff resume <id>  (or --latest)');
+    process.exitCode = 1;
+    return;
+  }
+  let projectId = null;
+  if (flags.latest) {
+    try {
+      projectId = (await detectProject(flags.path || process.cwd())).id;
+    } catch {
+      projectId = null; // fall back to newest across all projects
+    }
+  }
+  const handoff = await executeHandoffResume({ id, latest: Boolean(flags.latest), projectId });
+  if (!handoff.found) {
+    p.log.error(id ? `No handoff found for id: ${chalk.bold(id)}` : 'No handoffs found for this project.');
+    process.exitCode = 1;
+    return;
+  }
+  const format = typeof flags.format === 'string' ? flags.format : 'plain';
+  const brief = buildAgentBrief(handoff, { format });
+  if (flags.json) {
+    console.log(JSON.stringify({ ...handoff, brief }, null, 2));
+    return;
+  }
+  // Brief is meant to be copied/piped into an agent; print it raw.
+  console.log(brief);
+}
+
+async function runHandoff(subcommand, flags, rest) {
   if (subcommand === 'create') { await runHandoffCreate(flags); return; }
+  if (subcommand === 'list') { await runHandoffList(flags); return; }
+  if (subcommand === 'resume') {
+    const id = rest.find((arg) => !arg.startsWith('--') && arg !== 'resume');
+    await runHandoffResume(id, flags);
+    return;
+  }
   p.log.error(`Unknown handoff subcommand: ${chalk.bold(subcommand)}`);
   process.exitCode = 1;
+}
+
+async function runWatch(flags) {
+  const runtime = flags.runtime || 'claude';
+  let result;
+  try {
+    result = await executeWatchInstall({ runtime, events: flags.on });
+  } catch (err) {
+    p.log.error(err.message);
+    process.exitCode = 1;
+    return;
+  }
+  if (result.changed) {
+    p.note(
+      [
+        `${chalk.dim('runtime')}   ${runtime}`,
+        `${chalk.dim('events')}    ${result.events.join(', ')}`,
+        `${chalk.dim('file')}      ${result.target}`,
+      ].join('\n'),
+      'Auto-handoff enabled',
+    );
+    p.outro(`${chalk.green('✓')}  Threadline will capture a handoff on those events. Undo: ${chalk.cyan('threadline unwatch')}`);
+  } else {
+    p.log.message(`Auto-handoff already enabled for ${chalk.bold(runtime)} (${result.events.join(', ')}).`);
+  }
+}
+
+async function runUnwatch(flags) {
+  const runtime = flags.runtime || 'claude';
+  let result;
+  try {
+    result = await executeWatchRemove({ runtime });
+  } catch (err) {
+    p.log.error(err.message);
+    process.exitCode = 1;
+    return;
+  }
+  if (result.changed) {
+    p.log.success(`Auto-handoff hooks removed for ${chalk.bold(runtime)}.`);
+  } else {
+    p.log.message(`No Threadline auto-handoff hooks found for ${chalk.bold(runtime)}.`);
+  }
 }
 
 async function runTools(subcommand, flags, rest) {
@@ -795,7 +906,11 @@ ${chalk.bold('Usage')}
   ${chalk.cyan('threadline tools')}     ${chalk.dim('enable <tool-id> [--runtimes claude,codex,...]')}
   ${chalk.cyan('threadline index')}     ${chalk.dim('[--path <dir>] [--dry-run]')}
   ${chalk.cyan('threadline preferences')} ${chalk.dim('set  [--caveman-mode full|lite|ultra|wenyan|off] [--thinking true|false] [--runtimes claude,codex,...] [--yes]')}
-  ${chalk.cyan('threadline handoff')}   ${chalk.dim('create  [--title <t>] [--summary <s>] [--vault <path>]')}
+  ${chalk.cyan('threadline handoff')}   ${chalk.dim('create  [--title <t>] [--summary <s>] [--vault <path>] [--auto]')}
+  ${chalk.cyan('threadline handoff')}   ${chalk.dim('list  [--json]')}
+  ${chalk.cyan('threadline handoff')}   ${chalk.dim('resume <id>|--latest  [--format claude|codex|plain] [--json]')}
+  ${chalk.cyan('threadline watch')}     ${chalk.dim('[--runtime claude] [--on sessionend,precompact]   # auto-capture handoffs')}
+  ${chalk.cyan('threadline unwatch')}   ${chalk.dim('[--runtime claude]')}
   ${chalk.cyan('threadline paths')}
 
 ${chalk.bold('Flags')}
@@ -854,9 +969,12 @@ export async function main(argv) {
 
   if (command === 'handoff') {
     const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'create';
-    await runHandoff(subcommand, flags);
+    await runHandoff(subcommand, flags, rest);
     return;
   }
+
+  if (command === 'watch')   { await runWatch(flags); return; }
+  if (command === 'unwatch') { await runUnwatch(flags); return; }
 
   if (command === 'tools') {
     const subcommand = rest.find((arg) => !arg.startsWith('--')) || 'list';

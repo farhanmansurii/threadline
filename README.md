@@ -7,11 +7,12 @@
    █    █   █   █     █▀▀▀▀  ▄▀▀▀█  █   █    █      █    █   █  █▀▀▀▀
    ▀▄▄  █   █   █     ▀█▄▄▀  ▀▄▄▀█  ▀█▄██    ▀▄▄  ▄▄█▄▄  █   █  ▀█▄▄▀
 
-        One config for Claude, Codex, Cursor, Kimi, OpenCode, and whatever
-                                                  comes next.
+        ·──────────────────────────────────────────────────────·
+        Portable memory for agentic coding.
+        Any agent resumes where the last one left off.
 ```
 
-**One config. Every AI tool. Zero repo clutter.**
+**Portable memory & provenance for agentic coding. Switch tools, switch machines, never lose the thread.**
 
 [![npm version](https://img.shields.io/npm/v/threadline-cli?style=flat-square&color=0EA5E9)](https://www.npmjs.com/package/threadline-cli)
 [![license](https://img.shields.io/npm/l/threadline-cli?style=flat-square&color=8B5CF6)](LICENSE)
@@ -26,30 +27,30 @@
 
 ## What is Threadline?
 
-Threadline is the missing layer between your machine, your repos, and your AI coding assistants. It detects your project stack, installs portable skills across every runtime you use, keeps project state *outside* your git history, and lets agents resume work through stable handoff IDs.
+Threadline is the tool-neutral continuity layer for agentic coding. When an agent stops, runs out of context, or you switch from Claude Code to Codex (or to another machine), the state of *what was being done and why* normally evaporates — it's trapped inside each tool's private session store. Threadline sits **above** every tool and captures that state as a portable, git-aware **handoff** any agent can resume from.
 
-Stop copying `.claude/` folders into every repo. Stop maintaining five different config formats. Threadline normalizes it all.
+It also normalizes agent config across runtimes and keeps project state *outside* your git history — but those serve the headline: never losing the thread.
 
 ## Why Threadline Exists
 
-Most developers now switch between multiple AI coding tools — Claude Code for deep reasoning, Codex for agentic tasks, Cursor for IDE integration, Kimi for long context. Each one wants its own config directory, its own skills folder, its own project metadata. That creates three problems:
+Developers now switch between multiple AI coding tools — Claude Code for deep reasoning, Codex for agentic tasks, Cursor for IDE work, Kimi for long context. The expensive problem isn't config formatting; it's **continuity**:
 
-1. **Config sprawl.** Every repo grows a mess of `.claude/`, `.codex/`, `.cursor/` directories.
-2. **Skill lock-in.** A skill you wrote for Claude Code doesn't work in Codex or Cursor.
-3. **State loss.** Switch machines or tools and your project context disappears.
+1. **State loss.** Hit a context wall or switch tools mid-task and the agent's working memory — branch, diff, decisions, what's verified — is gone. You re-explain everything.
+2. **No cross-tool replay.** Work started in one agent can't be picked up by another. Each tool is an island.
+3. **No provenance.** As agents touch real code, "what was the agent configured with when it made this change?" has no answer.
 
-Threadline solves all three with a single, portable runtime layer.
+Threadline solves continuity first: **auto-captured, git-grounded handoffs** that replay into any runtime. Config sync and zero-clutter project state come along for free.
 
 ## Features
 
+- **Git-Grounded Handoffs** — Every handoff captures real state: branch, HEAD, ahead/behind, uncommitted files, recent commits. Not a stub you fill in by hand.
+- **Auto-Capture** — `threadline watch` installs hooks so a handoff is written automatically when a session ends or context is about to compact. No discipline required.
+- **Cross-Tool Resume** — `threadline resume` emits an agent-replayable brief, framed for the target tool (`--format claude|codex`). Start in Claude Code, continue in Codex.
 - **Multi-Runtime Setup** — Configure Claude Code, Codex, Cursor, Kimi, OpenCode, or any generic CLI in one command.
 - **Zero Repo Clutter** — Project profiles live under `~/.local/share/threadline/` by default. Your git history stays clean.
 - **Automatic Stack Detection** — Detects Node.js, React, Vite, Next.js, TypeScript, Firebase, and more. Recommends only the skills you need.
 - **Portable Skills** — Write skills once. Threadline adapts them for each runtime's expected format.
-- **Obsidian Handoffs** — Generate Markdown handoffs with stable IDs that any agent can resume from.
-- **RAG Indexing** — Manifest-based indexing prepares your repo for retrieval-augmented generation.
-- **Atomic & Safe** — All writes are atomic and idempotent. Merge mode preserves your existing config. Replace mode requires an explicit `--yes`.
-- **Modern CLI Tools** — Optionally integrates `fd`, `ripgrep`, `sd`, `bat`, `ast-grep`, and RTK for a better terminal experience.
+- **Atomic & Safe** — All writes are atomic, idempotent, and backed up. Merge mode preserves your existing config. Replace mode requires an explicit `--yes`.
 
 ## Quick Start
 
@@ -61,13 +62,22 @@ npx threadline-cli setup
 
 This launches an interactive onboarding that scans your system, detects installed AI runtimes, and asks which ones to configure.
 
-### Inside a Project
+### The Continuity Loop
 
 ```bash
-npx threadline-cli init --local
-npx threadline-cli index
-npx threadline-cli handoff create --title "Implemented auth flow"
+# 1. Turn on auto-capture once (installs Claude Code session hooks).
+npx threadline-cli watch
+
+# 2. Work normally. On session end / pre-compaction, a git-grounded
+#    handoff is written automatically. Or capture one yourself:
+npx threadline-cli handoff create --auto
+
+# 3. Switch tools, switch machines, come back next week — resume.
+#    Pipe the brief straight into another agent:
+npx threadline-cli handoff resume --latest --format codex
 ```
+
+`resume` prints an agent-replayable brief: the summary, exactly where the code was left (branch, diff, unpushed commits, changed files), and the next actions — ground truth, not vibes.
 
 ### Non-Interactive / CI Mode
 
@@ -165,7 +175,10 @@ $ threadline detect --json
 | `threadline skills list` | List all available skills from the registry |
 | `threadline skills recommend` | Recommend skills for the current project stack |
 | `threadline index` | Build a manifest-based RAG index |
-| `threadline handoff create` | Write an Obsidian-compatible Markdown handoff |
+| `threadline handoff create` | Write a git-grounded handoff (`--auto` to derive from git) |
+| `threadline handoff list` | List all handoffs, newest first |
+| `threadline handoff resume` | Print an agent-replayable brief (`--latest`, `--format claude\|codex`) |
+| `threadline watch` / `unwatch` | Install / remove auto-capture session hooks |
 | `threadline tools list` | Show available modern CLI tool integrations |
 
 See [docs/commands.md](docs/commands.md) for full command reference.
@@ -199,9 +212,9 @@ Project setup is local by default:
 
 ## Status
 
-Threadline is in early alpha. The current CLI supports project detection, skill listing and recommendation, setup dry-runs, local project profile writes, multi-runtime setup writes, adoption reports, guarded replace mode, Obsidian Markdown handoffs, and manifest-based RAG indexing. Setup writes are atomic, idempotent, reject relative XDG state paths, and fail closed on conflicting unmanaged Codex TOML tables.
+Threadline is in early alpha. The continuity layer works today: git-grounded handoff capture, `handoff list`/`resume` (by id or `--latest`), agent-replayable briefs with per-tool framing (`--format claude|codex`), and auto-capture via `watch`/`unwatch` session hooks on Claude Code. The CLI also supports project detection, skill listing/recommendation/install, multi-runtime setup (merge/adopt/guarded replace), and manifest-based indexing. All writes are atomic, idempotent, backed up, reject relative XDG state paths, and fail closed on conflicting unmanaged Codex TOML tables.
 
-LightRAG embeddings, external skill fetching, `init --repo`, and advanced runtime adapters are staged for follow-up releases.
+Per-runtime auto-capture beyond Claude, the handoff timeline, team handoffs, LightRAG embeddings, and a verifiable skill lockfile are staged for follow-up releases.
 
 ## License
 

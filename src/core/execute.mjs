@@ -7,6 +7,7 @@ import { readTemplate, renderTemplate, repoRoot } from './templates.mjs';
 import { executeSkillInstall as runSkillInstall } from './skill-install.mjs';
 import { getAdapter, normalizeRuntimes } from '../adapters/index.mjs';
 import { installToolStackForRuntimes } from '../utils/tool-stack.mjs';
+import { captureGitState, renderChangedFiles, renderGitState } from '../utils/git.mjs';
 import {
   copyDir,
   fileExists,
@@ -316,9 +317,28 @@ export async function executeRagIndex({ profile }) {
   };
 }
 
-export async function executeHandoffCreate({ profile, title, summary, vault }) {
+export async function executeHandoffCreate({ profile, title, summary, vault, auto = false }) {
   const paths = getThreadlinePaths();
-  const handoffId = createHandoffId(title || profile.name);
+  const git = await captureGitState(profile.root);
+
+  // Auto mode (hook-fired): skip writing when there is genuinely nothing to
+  // capture, so background triggers don't spam the vault with empty handoffs.
+  if (auto && git.isRepo && !git.dirty && git.ahead === 0) {
+    return {
+      title: 'Handoff skipped',
+      mode: 'obsidian',
+      dryRun: false,
+      skipped: true,
+      actions: [],
+      notes: ['Nothing to hand off (working tree clean and in sync).'],
+      results: [],
+    };
+  }
+
+  const effectiveTitle = title || (auto ? deriveAutoTitle(profile, git) : null);
+  const effectiveSummary = summary || (auto ? deriveAutoSummary(profile, git) : null);
+  const resolvedSummary = effectiveSummary || `Threadline handoff for ${profile.name}.`;
+  const handoffId = createHandoffId(effectiveTitle || profile.name);
   const createdAt = new Date().toISOString();
   const vaultRoot = expandHome(vault || process.env.THREADLINE_OBSIDIAN_VAULT || path.join(paths.dataDir, 'obsidian-vault'));
   const projectSlug = slugify(profile.name);
@@ -328,15 +348,16 @@ export async function executeHandoffCreate({ profile, title, summary, vault }) {
     handoffId,
     projectId: profile.id,
     projectName: profile.name,
-    feature: title || profile.name,
+    feature: effectiveTitle || profile.name,
     createdAt,
-    handoffTitle: title || `Handoff ${handoffId}`,
-    summary: summary || `Threadline handoff for ${profile.name}.`,
+    handoffTitle: effectiveTitle || `Handoff ${handoffId}`,
+    summary: resolvedSummary,
+    gitState: renderGitState(git),
     decisions: '- Pending',
-    changedFiles: '- Pending',
+    changedFiles: renderChangedFiles(git),
     verification: '- Pending',
     blockers: '- None recorded',
-    nextActions: '- Resume with current project profile and inspect repo state.',
+    nextActions: deriveNextActions(git),
   });
   const handoffPath = path.join(handoffDir, `${handoffId}.md`);
   const projectDir = getProjectDir(profile);
@@ -346,7 +367,7 @@ export async function executeHandoffCreate({ profile, title, summary, vault }) {
     id: handoffId,
     projectId: profile.id,
     workspaceId: profile.workspaceId,
-    title: title || `Handoff ${handoffId}`,
+    title: effectiveTitle || `Handoff ${handoffId}`,
     createdAt,
     path: handoffPath,
   };
@@ -356,8 +377,9 @@ export async function executeHandoffCreate({ profile, title, summary, vault }) {
     await writeTextIfChanged(handoffPath, markdown),
     await writeJsonIfChanged(jsonPath, {
       ...entry,
-      summary: summary || `Threadline handoff for ${profile.name}.`,
+      summary: resolvedSummary,
       root: profile.root,
+      git,
     }),
     await writeJsonIfChanged(indexPath, nextIndex),
   ];
@@ -409,13 +431,20 @@ export async function executeHandoffList() {
 }
 
 /**
- * Resolve a handoff by full or prefix ID match.
- * Returns { found, id, title, projectId, createdAt, root, summary, sections, markdownPath }
+ * Resolve a handoff by full/prefix ID, or the most recent one when `latest` is
+ * set (optionally scoped to a `projectId`). Returns
+ * { found, id, title, projectId, createdAt, root, summary, git, sections, markdownPath }
  */
-export async function executeHandoffResume({ id }) {
+export async function executeHandoffResume({ id, latest = false, projectId = null }) {
   const all = await executeHandoffList();
-  const entry = all.find((e) => e.id === id || e.id.startsWith(id));
-  if (!entry) return { found: false, id };
+  let entry;
+  if (latest) {
+    const scoped = projectId ? all.filter((e) => e.projectId === projectId) : all;
+    entry = scoped[0]; // executeHandoffList returns newest-first
+  } else {
+    entry = all.find((e) => e.id === id || e.id.startsWith(id));
+  }
+  if (!entry) return { found: false, id: id ?? null };
 
   const jsonPath = entry.path.replace(/\.md$/, '.json');
   const full = (await readJsonIfExists(jsonPath)) ?? entry;
@@ -430,9 +459,74 @@ export async function executeHandoffResume({ id }) {
     createdAt: entry.createdAt,
     root: full.root ?? null,
     summary: full.summary ?? sections.summary ?? 'No summary recorded.',
+    git: full.git ?? null,
     sections,
     markdownPath: entry.path,
   };
+}
+
+/**
+ * Build a compact, agent-replayable brief from a resolved handoff. Designed to
+ * be injected into any runtime's context so work continues without the human
+ * re-explaining state.
+ *
+ * `format` frames the same ground-truth payload for the target tool:
+ *   - "plain"  (default): the raw brief
+ *   - "claude": prefixed as a resume directive for Claude Code
+ *   - "codex":  framed as an AGENTS-style resume preamble for Codex
+ */
+export function buildAgentBrief(handoff, { format = 'plain' } = {}) {
+  if (!handoff?.found) return `No handoff found for id "${handoff?.id ?? ''}".`;
+  const body = buildBriefBody(handoff);
+  if (format === 'claude') {
+    return `You are resuming work that was already in progress. Below is ground-truth context captured by Threadline at the last handoff. Continue from here; do not restart.\n\n${body}`;
+  }
+  if (format === 'codex') {
+    return `# Resume Context (Threadline)\n\nContinue the in-progress work described below. This is ground truth captured at handoff time, not a fresh task.\n\n${body}`;
+  }
+  return body;
+}
+
+function buildBriefBody(handoff) {
+  const lines = [];
+  lines.push(`# Resume: ${handoff.title}`);
+  lines.push(`Handoff ${handoff.id} created ${handoff.createdAt}.`);
+  if (handoff.root) lines.push(`Repo root: ${handoff.root}`);
+  lines.push('');
+  lines.push('## Summary');
+  lines.push(handoff.summary);
+
+  const git = handoff.git;
+  if (git?.isRepo) {
+    lines.push('');
+    lines.push('## Where the code was left');
+    lines.push(`Branch \`${git.branch ?? 'unknown'}\` at \`${git.head ?? 'unknown'}\`, working tree ${git.dirty ? 'dirty' : 'clean'}.`);
+    if (git.upstream) lines.push(`${git.ahead} commit(s) ahead, ${git.behind} behind \`${git.upstream}\`.`);
+    const changed = [...git.staged, ...git.unstaged, ...git.untracked];
+    if (changed.length) {
+      lines.push(`Uncommitted files (${changed.length}): ${changed.slice(0, 20).join(', ')}${changed.length > 20 ? ', …' : ''}`);
+    }
+    if (git.recentCommits.length) {
+      lines.push('Recent commits:');
+      for (const commit of git.recentCommits) lines.push(`  - ${commit.sha} ${commit.subject}`);
+    }
+  }
+
+  const decisions = handoff.sections?.decisions;
+  if (decisions && !/^-?\s*pending$/i.test(decisions.trim())) {
+    lines.push('');
+    lines.push('## Decisions');
+    lines.push(decisions);
+  }
+
+  const nextActions = handoff.sections?.next_actions;
+  if (nextActions) {
+    lines.push('');
+    lines.push('## Next actions');
+    lines.push(nextActions);
+  }
+
+  return lines.join('\n');
 }
 
 /** Extract ## Section content from a handoff markdown string into a plain object. */
@@ -464,6 +558,45 @@ async function fileManifestEntry(root, file) {
     type: path.extname(file).slice(1) || 'text',
     sha256: crypto.createHash('sha256').update(content).digest('hex'),
   };
+}
+
+/** Derive a handoff title from git context for auto/hook-fired handoffs. */
+function deriveAutoTitle(profile, git) {
+  if (git.isRepo && git.branch && !['main', 'master', 'HEAD'].includes(git.branch)) {
+    return git.branch;
+  }
+  if (git.recentCommits[0]?.subject) return git.recentCommits[0].subject;
+  return profile.name;
+}
+
+/** Derive a one-line summary from git context for auto/hook-fired handoffs. */
+function deriveAutoSummary(profile, git) {
+  if (!git.isRepo) return `Auto-handoff for ${profile.name}.`;
+  const changed = git.staged.length + git.unstaged.length + git.untracked.length;
+  const parts = [];
+  if (changed) parts.push(`${changed} uncommitted file(s)`);
+  if (git.ahead) parts.push(`${git.ahead} unpushed commit(s)`);
+  const where = git.branch ? `on \`${git.branch}\`` : '';
+  return `Auto-handoff ${where}${parts.length ? `: ${parts.join(', ')}` : ''}.`.replace(/\s+/g, ' ').trim();
+}
+
+/** Suggest concrete next actions from captured git state. */
+function deriveNextActions(git) {
+  if (!git.isRepo) {
+    return '- Inspect repo state and continue from the summary above.';
+  }
+  const actions = [];
+  const changed = git.staged.length + git.unstaged.length + git.untracked.length;
+  if (changed > 0) {
+    actions.push(`- Review ${changed} uncommitted change(s) on \`${git.branch ?? 'HEAD'}\` before continuing.`);
+  }
+  if (git.ahead > 0) {
+    actions.push(`- ${git.ahead} local commit(s) not yet pushed${git.upstream ? ` to \`${git.upstream}\`` : ''}.`);
+  }
+  if (!changed && !git.ahead) {
+    actions.push('- Working tree clean and in sync. Continue from the summary above.');
+  }
+  return actions.join('\n');
 }
 
 function createHandoffId(value) {

@@ -61,7 +61,6 @@ threadline skills recommend --path /path/to/repo
 ## Planned Commands
 
 ```bash
-threadline resume <handoff-id>
 threadline context <query>
 threadline learnings
 ```
@@ -77,11 +76,34 @@ threadline index --path /path/to/repo
 
 This is not yet an embedding/vector index.
 
-## `threadline handoff create`
+## `threadline handoff`
 
-Writes a Markdown handoff into an Obsidian-compatible vault path and updates the local handoff index.
+Capture, list, and resume git-grounded handoffs. See [handoff-and-obsidian.md](handoff-and-obsidian.md) for the full model.
 
 ```bash
+# create — captures git state automatically; title/summary optional
 threadline handoff create --title "Feature name" --summary "Current state"
 threadline handoff create --vault ~/Documents/Obsidian
+threadline handoff create --auto            # no prompts; derive title/summary from git
+
+# list — newest first
+threadline handoff list
+threadline handoff list --json
+
+# resume — prints an agent-replayable brief on stdout
+threadline handoff resume <handoff-id>
+threadline handoff resume --latest
+threadline handoff resume --latest --format codex   # plain | claude | codex
 ```
+
+## `threadline watch` / `threadline unwatch`
+
+Install or remove auto-capture hooks so a handoff is written automatically at session end and pre-compaction. Merges into `~/.claude/settings.json` idempotently and reversibly; preserves unrelated hooks and settings.
+
+```bash
+threadline watch                       # claude; SessionEnd + PreCompact
+threadline watch --on sessionend       # choose events
+threadline unwatch
+```
+
+Currently targets the `claude` runtime.

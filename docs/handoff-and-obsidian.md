@@ -21,31 +21,66 @@ Obsidian Vault/
 
 ## Handoff Flow
 
-Claude Code can expose `/handoff` through a slash command. Codex, Cursor, OpenCode, and Kimi use explicit CLI commands.
+A handoff is a portable, git-grounded snapshot of in-progress work that any agent can resume from. Create, list, and resume them with explicit CLI commands; Claude Code can also expose `/handoff` as a slash command.
 
 ```bash
-# With global install:
-threadline handoff create
+# Create — title/summary optional; git state is captured automatically.
 threadline handoff create --title "RMS Dashboard" --summary "Continue dashboard work."
 threadline handoff create --vault ~/Documents/Obsidian
-threadline resume rms-dashboard-2026-05-27-a7f3
 
-# With npx:
-npx threadline-cli handoff create --title "RMS Dashboard"
+# Create from git context with no prompts (used by hooks; see Auto-Capture).
+threadline handoff create --auto
+
+# List, newest first.
+threadline handoff list
+threadline handoff list --json
+
+# Resume — prints an agent-replayable brief on stdout.
+threadline handoff resume rms-dashboard-2026-05-27-a7f3
+threadline handoff resume --latest                 # most recent for this project
+threadline handoff resume --latest --format codex  # framed for the target tool
 ```
 
-The handoff writer should capture:
+### What a handoff captures
 
-- human-readable ID
-- current project ID
-- active feature or folder
-- summary of work
-- decisions made
-- changed files
-- commands run
-- verification status
-- blockers
-- next suggested action
+Each handoff writes a human-readable Markdown file (in the Obsidian vault) and a machine-readable `.json` sibling. Captured automatically from git:
+
+- stable handoff ID, project ID, created timestamp
+- branch, HEAD sha, upstream, ahead/behind counts
+- working-tree status: staged, unstaged, and untracked files
+- recent commit subjects
+- derived next actions (review N uncommitted files, push M commits, …)
+
+Filled by you or the agent (left as `Pending` otherwise): summary, decisions, verification, blockers.
+
+### Cross-tool resume
+
+`resume` reduces a handoff to a compact brief designed to be injected into another agent's context. `--format` frames the same ground-truth payload for the target tool:
+
+- `plain` (default) — the raw brief
+- `claude` — prefixed as a resume directive for Claude Code
+- `codex` — framed as an AGENTS-style resume preamble for Codex
+
+Start work in one tool, hit a context wall, then continue in another:
+
+```bash
+threadline handoff create --auto
+threadline handoff resume --latest --format codex | <pipe into Codex>
+```
+
+## Auto-Capture (`watch` / `unwatch`)
+
+Manual handoffs only happen if you remember. `watch` installs runtime hooks so a handoff is captured automatically at natural boundaries — session end and pre-compaction — when continuity matters most.
+
+```bash
+threadline watch                              # Claude, SessionEnd + PreCompact
+threadline watch --on sessionend              # choose events
+threadline unwatch                            # remove Threadline's hooks
+```
+
+`watch` merges into `~/.claude/settings.json` idempotently: it preserves existing hooks and unrelated settings, marks its own entries with a stable command sentinel, and `unwatch` removes exactly those. Auto-fired captures skip writing when the working tree is clean and in sync, so the vault is not spammed with empty handoffs.
+
+> Currently `watch` targets the `claude` runtime. Other runtimes use manual or `/handoff`-driven capture until their hook adapters land.
 
 ## Hook Policy
 

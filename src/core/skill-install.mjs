@@ -1,4 +1,6 @@
 import path from 'node:path';
+import os from 'node:os';
+import fs from 'node:fs/promises';
 import { readSkillRegistry } from './skills.mjs';
 import { readTemplate, repoRoot } from './templates.mjs';
 import { getAdapter, normalizeRuntimes } from '../adapters/index.mjs';
@@ -126,6 +128,16 @@ async function installPackForRuntime(pack, runtime, adapter) {
   }
 
   if (source?.type === 'github') {
+    // Prefer a full skill-tree download: multi-file skills (scripts/, reference/)
+    // break if only SKILL.md is copied. Falls back to single-file fetch below.
+    const treeDir = await fetchGithubSkillTree(source.repo, source.skill, pack.id).catch(() => null);
+    if (treeDir) {
+      const skillResults = await adapter.installSkills(treeDir);
+      const commandResults = await adapter.installCommands(safeCommands);
+      await fs.rm(path.dirname(treeDir), { recursive: true, force: true });
+      return [...skillResults, ...commandResults];
+    }
+
     const content = await fetchGithubSkill(source.repo, source.skill).catch(() => null);
     if (content) {
       const targetDir = path.join(adapter.homeDir, 'skills', pack.id);
@@ -144,6 +156,65 @@ async function installPackForRuntime(pack, runtime, adapter) {
   const result = await writeTextIfChanged(path.join(targetDir, 'SKILL.md'), wrapper);
   const commandResults = await adapter.installCommands(safeCommands);
   return [result, ...commandResults];
+}
+
+async function resolveDefaultBranch(repo) {
+  try {
+    const response = await fetch(`https://api.github.com/repos/${repo}`);
+    if (response.ok) {
+      const meta = await response.json();
+      if (meta?.default_branch) return meta.default_branch;
+    }
+  } catch {
+    // fall through
+  }
+  return 'main';
+}
+
+// Downloads an entire skill directory (SKILL.md plus scripts/, reference/, etc.)
+// into a temp dir whose basename equals `packId`, so adapter.installSkills copies
+// the full tree. Returns the temp dir path, or null if the tree can't be resolved.
+async function fetchGithubSkillTree(repo, skill, packId) {
+  const branch = await resolveDefaultBranch(repo);
+  const treeResponse = await fetch(
+    `https://api.github.com/repos/${repo}/git/trees/${branch}?recursive=1`,
+  );
+  if (!treeResponse.ok) return null;
+  const tree = await treeResponse.json();
+  const entries = Array.isArray(tree?.tree) ? tree.tree : [];
+
+  // Locate SKILL.md to derive the skill's base path within the repo.
+  const manifest = entries.find(
+    (entry) =>
+      entry.type === 'blob' &&
+      (entry.path === 'SKILL.md' || entry.path.endsWith(`/${skill}/SKILL.md`)),
+  );
+  if (!manifest) return null;
+  const basePath = manifest.path.slice(0, manifest.path.length - 'SKILL.md'.length); // keeps trailing slash or ''
+
+  const blobs = entries.filter(
+    (entry) => entry.type === 'blob' && entry.path.startsWith(basePath),
+  );
+  if (!blobs.length) return null;
+
+  const tmpDir = path.join(os.tmpdir(), `threadline-skill-${packId}-${Date.now()}`, packId);
+  await fs.mkdir(tmpDir, { recursive: true });
+
+  for (const blob of blobs) {
+    const relative = blob.path.slice(basePath.length);
+    const rawUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${blob.path}`;
+    const fileResponse = await fetch(rawUrl);
+    if (!fileResponse.ok) {
+      await fs.rm(path.dirname(tmpDir), { recursive: true, force: true });
+      return null;
+    }
+    const buffer = Buffer.from(await fileResponse.arrayBuffer());
+    const dest = path.join(tmpDir, relative);
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.writeFile(dest, buffer);
+  }
+
+  return tmpDir;
 }
 
 async function fetchGithubSkill(repo, skill) {

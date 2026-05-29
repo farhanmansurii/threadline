@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
+import { captureGitState } from '../src/utils/git.mjs';
 
 const execFileAsync = promisify(execFile);
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -163,6 +164,175 @@ test('handoff create writes markdown and index', async () => {
   assert.ok(dataFiles.some((file) => file.endsWith('handoffs/index.json')));
   assert.ok(vaultFiles.some((file) => file.endsWith('.json')));
 });
+
+test('captureGitState reports branch, commits, and uncommitted files', async () => {
+  const repo = await makeGitRepo();
+  await fs.writeFile(path.join(repo, 'a.txt'), 'hello\n');
+  await git(repo, ['add', 'a.txt']);
+  await git(repo, ['commit', '-qm', 'first commit']);
+  await fs.writeFile(path.join(repo, 'a.txt'), 'changed\n'); // unstaged
+  await fs.writeFile(path.join(repo, 'b.txt'), 'new\n'); // untracked
+
+  const state = await captureGitState(repo);
+  assert.equal(state.isRepo, true);
+  assert.equal(state.branch, 'main');
+  assert.ok(state.head);
+  assert.equal(state.dirty, true);
+  assert.ok(state.unstaged.includes('a.txt'));
+  assert.ok(state.untracked.includes('b.txt'));
+  assert.ok(state.recentCommits.some((c) => c.subject === 'first commit'));
+});
+
+test('captureGitState fails soft on a non-git directory', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'threadline-nogit-'));
+  const state = await captureGitState(dir);
+  assert.equal(state.isRepo, false);
+  assert.deepEqual(state.untracked, []);
+  assert.equal(state.dirty, false);
+});
+
+test('handoff create captures real git state in the markdown', async () => {
+  const env = await isolatedEnv();
+  const vault = path.join(env.HOME, 'vault');
+  const repo = await makeGitRepo();
+  await fs.writeFile(path.join(repo, 'package.json'), '{"name":"git-handoff-test"}\n');
+  await git(repo, ['add', '.']);
+  await git(repo, ['commit', '-qm', 'init']);
+  await fs.writeFile(path.join(repo, 'feature.js'), 'export const x = 1\n'); // untracked
+
+  await run(['handoff', 'create', '--path', repo, '--title', 'Git Capture', '--vault', vault], { env });
+
+  const mdPath = (await listFiles(vault)).find((file) => file.endsWith('.md'));
+  const content = await fs.readFile(mdPath, 'utf8');
+  assert.match(content, /## Git State/);
+  assert.match(content, /Branch: `main`/);
+  assert.match(content, /feature\.js.*untracked/);
+});
+
+test('handoff resume emits an agent brief with git context', async () => {
+  const env = await isolatedEnv();
+  const vault = path.join(env.HOME, 'vault');
+  const repo = await makeGitRepo();
+  await fs.writeFile(path.join(repo, 'package.json'), '{"name":"resume-test"}\n');
+  await git(repo, ['add', '.']);
+  await git(repo, ['commit', '-qm', 'init']);
+
+  const create = await run(
+    ['handoff', 'create', '--path', repo, '--title', 'Resume Me', '--summary', 'Half-done auth.', '--vault', vault],
+    { env },
+  );
+  const id = create.stdout.match(/Resume ID:\s*(\S+)/)[1];
+
+  const resume = await run(['handoff', 'resume', id], { env });
+  assert.match(resume.stdout, /# Resume: Resume Me/);
+  assert.match(resume.stdout, /Half-done auth\./);
+  assert.match(resume.stdout, /Branch `main`/);
+
+  const listed = await run(['handoff', 'list', '--json'], { env });
+  const entries = JSON.parse(listed.stdout);
+  assert.ok(entries.some((entry) => entry.id === id));
+});
+
+test('handoff create --auto skips when working tree is clean and in sync', async () => {
+  const env = await isolatedEnv();
+  const vault = path.join(env.HOME, 'vault');
+  const repo = await makeGitRepo();
+  await fs.writeFile(path.join(repo, 'package.json'), '{"name":"auto-skip"}\n');
+  await git(repo, ['add', '.']);
+  await git(repo, ['commit', '-qm', 'init']);
+
+  const result = await run(['handoff', 'create', '--path', repo, '--auto', '--vault', vault], { env });
+  assert.match(result.stdout, /Nothing to hand off/);
+
+  const vaultFiles = await listFiles(vault).catch(() => []);
+  assert.equal(vaultFiles.length, 0);
+});
+
+test('handoff create --auto derives title and summary from git when dirty', async () => {
+  const env = await isolatedEnv();
+  const vault = path.join(env.HOME, 'vault');
+  const repo = await makeGitRepo();
+  await fs.writeFile(path.join(repo, 'package.json'), '{"name":"auto-write"}\n');
+  await git(repo, ['add', '.']);
+  await git(repo, ['commit', '-qm', 'init']);
+  await git(repo, ['checkout', '-q', '-b', 'feat/payments']);
+  await fs.writeFile(path.join(repo, 'pay.js'), 'export const pay = 1\n'); // untracked
+
+  const result = await run(['handoff', 'create', '--path', repo, '--auto', '--vault', vault], { env });
+  assert.match(result.stdout, /Handoff created:/);
+
+  const mdPath = (await listFiles(vault)).find((file) => file.endsWith('.md'));
+  const content = await fs.readFile(mdPath, 'utf8');
+  assert.match(content, /feature: feat\/payments/);
+  assert.match(content, /Auto-handoff on `feat\/payments`/);
+});
+
+test('handoff resume --latest with --format claude wraps the brief', async () => {
+  const env = await isolatedEnv();
+  const vault = path.join(env.HOME, 'vault');
+  const repo = await makeGitRepo();
+  await fs.writeFile(path.join(repo, 'package.json'), '{"name":"latest-test"}\n');
+  await git(repo, ['add', '.']);
+  await git(repo, ['commit', '-qm', 'init']);
+
+  await run(['handoff', 'create', '--path', repo, '--title', 'First', '--vault', vault], { env });
+  await run(['handoff', 'create', '--path', repo, '--title', 'Second', '--vault', vault], { env });
+
+  const resume = await run(['handoff', 'resume', '--latest', '--path', repo, '--format', 'claude'], { env });
+  assert.match(resume.stdout, /You are resuming work/);
+  assert.match(resume.stdout, /# Resume: Second/);
+});
+
+test('watch installs auto-handoff hooks idempotently and preserves unrelated settings', async () => {
+  const env = await isolatedEnv();
+  const settingsPath = path.join(env.HOME, '.claude', 'settings.json');
+  await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+  await fs.writeFile(
+    settingsPath,
+    JSON.stringify({ model: 'opus', hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: 'echo hi' }] }] } }, null, 2),
+  );
+
+  await run(['watch'], { env });
+  let settings = JSON.parse(await fs.readFile(settingsPath, 'utf8'));
+  assert.equal(settings.model, 'opus'); // unrelated key preserved
+  assert.ok(hasCommand(settings.hooks.SessionEnd, 'echo hi')); // unrelated hook preserved
+  assert.ok(hasCommand(settings.hooks.SessionEnd, 'threadline handoff create --auto'));
+  assert.ok(hasCommand(settings.hooks.PreCompact, 'threadline handoff create --auto'));
+
+  const second = await run(['watch'], { env });
+  assert.match(second.stdout, /already enabled/);
+
+  await run(['unwatch'], { env });
+  settings = JSON.parse(await fs.readFile(settingsPath, 'utf8'));
+  assert.equal(settings.model, 'opus');
+  assert.ok(hasCommand(settings.hooks.SessionEnd, 'echo hi')); // still preserved
+  assert.ok(!JSON.stringify(settings).includes('threadline handoff create --auto'));
+});
+
+function hasCommand(eventList, command) {
+  return Array.isArray(eventList) && eventList.some((entry) =>
+    entry.hooks?.some((hook) => hook.command?.includes(command)),
+  );
+}
+
+async function git(cwd, args) {
+  return execFileAsync('git', args, {
+    cwd,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'Test',
+      GIT_AUTHOR_EMAIL: 'test@example.com',
+      GIT_COMMITTER_NAME: 'Test',
+      GIT_COMMITTER_EMAIL: 'test@example.com',
+    },
+  });
+}
+
+async function makeGitRepo() {
+  const repo = await fs.mkdtemp(path.join(os.tmpdir(), 'threadline-git-'));
+  await git(repo, ['init', '-q', '-b', 'main']);
+  return repo;
+}
 
 async function run(args, options = {}) {
   return execFileAsync('node', [BIN, ...args], {
